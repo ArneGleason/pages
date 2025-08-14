@@ -2,10 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>PX Warehouse — New Labels Mock</title>
     <!-- Tailwind (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +12,6 @@
     <!-- Babel for in-browser JSX transform -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-      /* Smooth modal & toast transitions (optional flourish) */
       .fade-enter { opacity: 0; transform: translateY(6px); }
       .fade-enter-active { opacity: 1; transform: translateY(0); transition: all .18s ease; }
       .fade-exit { opacity: 1; transform: translateY(0); }
@@ -32,24 +28,28 @@
       const padNum = (n, padTo = 6) => String(n).padStart(padTo, "0");
       const todayIso = () => {
         const d = new Date();
-        return [
-          d.getFullYear(),
-          String(d.getMonth() + 1).padStart(2, "0"),
-          String(d.getDate()).padStart(2, "0"),
-        ].join("-");
+        return [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"), String(d.getDate()).padStart(2,"0")].join("-");
       };
-      const withinRanges = (n, ranges) => ranges.some(([a, b]) => n >= a && n <= b);
-      const generateNumbers = (start, qty) =>
-        Array.from({ length: Math.max(0, qty) }, (_, i) => start + i);
+      const withinRanges = (n, ranges) => ranges.some(([a,b]) => n >= a && n <= b);
+      const generateNumbers = (start, qty) => Array.from({ length: Math.max(0, qty) }, (_, i) => start + i);
       const makeBarcode = (prefix, n, padTo = 6) => `${prefix}${padNum(n, padTo)}`;
 
       // Mock existing issued ranges per label type (inclusive)
       const existingIssued = {
-        device: [[1, 15000]],   // PR_000001 .. PR_015000
+        device: [[1, 15000]],   // PR_000001 .. PR_015000 already issued
         box:    [[1, 10000]],   // BX_000001 .. BX_010000
         ml:     [[500, 1250]],  // ML_000500 .. ML_001250
         custom: [[1, 250]],     // CU_000001 .. CU_000250
       };
+
+      // -> compute the NEXT available number for a given type
+      function nextAvailableStartForType(t) {
+        const ranges = existingIssued[t] || [];
+        if (!ranges.length) return 1;
+        let maxEnd = 0;
+        for (const [, end] of ranges) if (end > maxEnd) maxEnd = end;
+        return maxEnd + 1;
+      }
 
       const typeConfigs = {
         device: { label: "Device", prefix: "PR_", hint: "Example: PR_000001" },
@@ -58,66 +58,28 @@
         custom: { label: "Custom", prefix: "CU_", hint: "Example: CU_000123" },
       };
 
-      // Simple inline SVG icons (keeps us dependency-free)
+      // Simple inline SVG icons (no deps)
       const Icon = {
-        Printer: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="1.8">
-            <path d="M7 8V4h10v4M6 17H5a2 2 0 0 1-2-2v-3a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3a2 2 0 0 1-2 2h-1" />
-            <path d="M7 14h10v6H7z" />
-          </svg>
-        ),
-        File: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="1.8">
-            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
-            <path d="M14 3v6h6" />
-          </svg>
-        ),
-        Alert: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <path d="M12 9v4M12 17h.01" />
-          </svg>
-        ),
-        Check: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2">
-            <path d="m20 6-11 11-5-5" />
-          </svg>
-        ),
-        X: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        ),
-        Info: (p) => (
-          <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2">
-            <circle cx="12" cy="12" r="9"></circle>
-            <path d="M12 8h.01M11 12h1v4h1" />
-          </svg>
-        ),
+        Printer: (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="1.8"><path d="M7 8V4h10v4M6 17H5a2 2 0 0 1-2-2v-3a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3a2 2 0 0 1-2 2h-1"/><path d="M7 14h10v6H7z"/></svg>,
+        File:    (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>,
+        Alert:   (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>,
+        Check:   (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2"><path d="m20 6-11 11-5-5"/></svg>,
+        X:       (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+        Info:    (p) => <svg {...p} viewBox="0 0 24 24" className={(p.className||"")+" fill-none stroke-current"} strokeWidth="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"/></svg>,
       };
 
-      // Fake barcode visualization using CSS stripes
       const StripeBarcode = ({ value }) => (
         <div className="flex flex-col items-center">
-          <div
-            className="w-56 h-28 rounded bg-[length:6px_100%]"
-            style={{ backgroundImage: "repeating-linear-gradient(90deg, black 0 2px, transparent 2px 3px)" }}
-            aria-label={`Barcode for ${value}`}
-          />
+          <div className="w-56 h-28 rounded bg-[length:6px_100%]"
+               style={{ backgroundImage: "repeating-linear-gradient(90deg, black 0 2px, transparent 2px 3px)" }}
+               aria-label={`Barcode for ${value}`} />
           <div className="text-xs mt-2 tracking-widest text-gray-700">{value}</div>
         </div>
       );
-
-      const FieldLabel = ({ children }) => (
-        <label className="text-sm font-medium text-gray-700">{children}</label>
-      );
+      const FieldLabel = ({ children }) => <label className="text-sm font-medium text-gray-700">{children}</label>;
 
       const Toast = ({ message, onClose }) => {
-        useEffect(() => {
-          if (!message) return;
-          const id = setTimeout(onClose, 2600);
-          return () => clearTimeout(id);
-        }, [message]);
+        useEffect(() => { if (!message) return; const id = setTimeout(onClose, 2600); return () => clearTimeout(id); }, [message]);
         if (!message) return null;
         return (
           <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl shadow-lg bg-white border px-4 py-3 fade-enter fade-enter-active">
@@ -145,17 +107,19 @@
       function App() {
         const [type, setType] = useState("device");
         const [labelName, setLabelName] = useState("Device");
-        const [start, setStart] = useState(15001); // device next; change to trigger overlaps
+        // Default start = next available for initial type
+        const [start, setStart] = useState(() => nextAvailableStartForType("device"));
         const [qty, setQty] = useState(500);
         const [equalsBarcode, setEqualsBarcode] = useState(false);
         const [confirm, setConfirm] = useState(null); // { mode: 'print'|'export' }
         const [showOverlaps, setShowOverlaps] = useState(false);
         const [toast, setToast] = useState("");
 
+        // When type changes, reset label name (if default) and set starting number to the next available for that type
         useEffect(() => {
-          // keep label name aligned with type if it was a default
           const defaults = { device: "Device", box: "Box", ml: "ML", custom: "Custom" };
-          setLabelName((prev) => (Object.values(defaults).includes(prev) ? defaults[type] : prev));
+          setLabelName(prev => (Object.values(defaults).includes(prev) ? defaults[type] : prev));
+          setStart(nextAvailableStartForType(type));
         }, [type]);
 
         const cfg = typeConfigs[type];
@@ -172,15 +136,15 @@
 
         const overlaps = useMemo(() => {
           const ranges = existingIssued[type] || [];
-          return requested.filter((n) => withinRanges(n, ranges));
+          return requested.filter(n => withinRanges(n, ranges));
         }, [requested, type]);
 
-        const uniques = requested.filter((n) => !overlaps.includes(n));
+        const uniques = requested.filter(n => !overlaps.includes(n));
 
         const first = requested[0] ?? Math.max(1, start || 1);
         const last = requested.length ? requested[requested.length - 1] : Math.max(1, start || 1);
         const startBarcode = makeBarcode(cfg.prefix, first, padTo);
-        const endBarcode = makeBarcode(cfg.prefix, last, padTo);
+        const endBarcode   = makeBarcode(cfg.prefix, last,  padTo);
 
         const exportFilename = `labels-${cfg.label.toLowerCase()}-${startBarcode}-${endBarcode}-${todayIso()}.xlsx`;
         const valid = start >= 1 && qty >= 1 && qty <= 1_000_000;
@@ -189,8 +153,8 @@
 
         const completeJob = (skipOverlaps) => {
           const count = skipOverlaps ? uniques.length : requested.length;
-          const verb = confirm?.mode === "export" ? "Exported" : "Printing";
-          const what = cfg.label.toLowerCase() + (confirm?.mode === "export" ? " barcodes" : " labels");
+          const verb  = confirm?.mode === "export" ? "Exported" : "Printing";
+          const what  = cfg.label.toLowerCase() + (confirm?.mode === "export" ? " barcodes" : " labels");
           setConfirm(null);
           setToast(`${verb} ${count} ${what}.`);
           setShowOverlaps(false);
@@ -288,15 +252,15 @@
                   <div className="rounded-xl bg-gray-50 border p-3 mb-5">
                     <div className="flex flex-wrap items-center gap-3 text-sm">
                       <span className="font-medium">Range:</span>
-                      <code className="px-2 py-1 rounded bg-white border">{startBarcode}</code>
+                      <code className="px-2 py-1 rounded bg-white border">{makeBarcode(cfg.prefix, start, padTo)}</code>
                       <span>to</span>
-                      <code className="px-2 py-1 rounded bg-white border">{endBarcode}</code>
-                      <span className="ml-auto text-gray-600">{requested.length} requested</span>
+                      <code className="px-2 py-1 rounded bg-white border">{makeBarcode(cfg.prefix, start + Math.max(0, qty) - 1, padTo)}</code>
+                      <span className="ml-auto text-gray-600">{Math.max(0, qty)} requested</span>
                     </div>
-                    {overlaps.length > 0 ? (
+                    {generateNumbers(start, Math.max(0, qty)).some(n => withinRanges(n, existingIssued[type] || [])) ? (
                       <div className="mt-2 flex items-center gap-2 text-amber-700 text-sm">
                         <Icon.Alert className="w-4 h-4" />
-                        <span>{overlaps.length} overlaps detected with existing barcodes. You can skip these at confirmation.</span>
+                        <span>Overlaps detected with existing barcodes. You can skip these at confirmation.</span>
                       </div>
                     ) : (
                       <div className="mt-2 text-sm text-green-700 flex items-center gap-2">
@@ -308,14 +272,14 @@
                   {/* Actions */}
                   <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={() => openConfirm("print")}
+                      onClick={() => valid && setConfirm({ mode: "print" })}
                       disabled={!valid}
                       className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 text-white px-4 py-2 text-sm font-medium shadow hover:bg-blue-700 disabled:opacity-40"
                     >
                       <Icon.Printer className="w-4 h-4" /> PRINT
                     </button>
                     <button
-                      onClick={() => openConfirm("export")}
+                      onClick={() => valid && setConfirm({ mode: "export" })}
                       disabled={!valid}
                       className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 text-white px-4 py-2 text-sm font-medium shadow hover:bg-black disabled:opacity-40"
                     >
@@ -330,16 +294,18 @@
                   <p className="text-sm text-gray-500 mb-4">Sample of the first output label:</p>
                   <div className="flex flex-col items-center gap-3 py-4">
                     <div className="text-base font-semibold">
-                      {equalsBarcode ? startBarcode : labelName}
+                      {equalsBarcode ? makeBarcode(typeConfigs[type].prefix, start, padTo) : labelName}
                     </div>
-                    <StripeBarcode value={startBarcode} />
+                    <StripeBarcode value={makeBarcode(typeConfigs[type].prefix, start, padTo)} />
                   </div>
                   <div className="mt-6 text-sm text-gray-600 space-y-1">
-                    <div><span className="font-medium">Prefix:</span> <span className="font-mono">{cfg.prefix}</span></div>
+                    <div><span className="font-medium">Prefix:</span> <span className="font-mono">{typeConfigs[type].prefix}</span></div>
                     <div><span className="font-medium">Digits:</span> {padTo}</div>
                     <div>
                       <span className="font-medium">Export filename:</span>
-                      <code className="break-all bg-gray-50 border rounded px-2 py-1 ml-1">{exportFilename}</code>
+                      <code className="break-all bg-gray-50 border rounded px-2 py-1 ml-1">
+                        {`labels-${typeConfigs[type].label.toLowerCase()}-${makeBarcode(typeConfigs[type].prefix, start, padTo)}-${makeBarcode(typeConfigs[type].prefix, start + Math.max(0, qty) - 1, padTo)}-${todayIso()}.xlsx`}
+                      </code>
                     </div>
                   </div>
                 </div>
@@ -348,92 +314,69 @@
 
             {/* Confirmation Modal */}
             <Modal open={!!confirm} onClose={() => setConfirm(null)}>
-              <div className="flex items-start justify-between">
-                <h4 className="text-lg font-semibold">
-                  Confirm {confirm?.mode === "export" ? "Export" : "Print"}
-                </h4>
-                <button className="p-1" onClick={() => setConfirm(null)}>
-                  <Icon.X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
+              {(() => {
+                const requested = generateNumbers(start, Math.max(0, qty));
+                const ranges = existingIssued[type] || [];
+                const overlaps = requested.filter((n) => withinRanges(n, ranges));
+                const uniques  = requested.filter((n) => !withinRanges(n, ranges));
+                const startBarcode = makeBarcode(typeConfigs[type].prefix, start, Math.max(6, String(start + Math.max(0, qty) - 1).length));
+                const endBarcode   = makeBarcode(typeConfigs[type].prefix, start + Math.max(0, qty) - 1, Math.max(6, String(start + Math.max(0, qty) - 1).length));
+                const filename = `labels-${typeConfigs[type].label.toLowerCase()}-${startBarcode}-${endBarcode}-${todayIso()}.xlsx`;
 
-              <div className="mt-3 text-sm text-gray-700 space-y-3">
-                <p>
-                  You are about to {confirm?.mode === "export" ? "export" : "print"}{" "}
-                  <strong>{requested.length}</strong> {cfg.label.toLowerCase()}{" "}
-                  {confirm?.mode === "export" ? "barcodes" : "labels"}.
-                  <br />
-                  Range:{" "}
-                  <code className="bg-gray-50 border rounded px-1">{startBarcode}</code> to{" "}
-                  <code className="bg-gray-50 border rounded px-1">{endBarcode}</code>
-                </p>
-                {confirm?.mode === "export" && (
-                  <p>
-                    Filename:{" "}
-                    <code className="bg-gray-50 border rounded px-1">{exportFilename}</code>
-                  </p>
-                )}
-
-                {overlaps.length > 0 ? (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
-                    <div className="flex items-center gap-2 text-amber-800">
-                      <Icon.Alert className="w-4 h-4" />
-                      <span>
-                        {overlaps.length} overlaps found. Proceeding will <strong>skip</strong> overlaps and{" "}
-                        {confirm?.mode === "export" ? "export" : "print"} the remaining{" "}
-                        <strong>{uniques.length}</strong> unique items.
-                      </span>
+                return (
+                  <>
+                    <div className="flex items-start justify-between">
+                      <h4 className="text-lg font-semibold">Confirm {confirm?.mode === "export" ? "Export" : "Print"}</h4>
+                      <button className="p-1" onClick={() => setConfirm(null)}><Icon.X className="w-5 h-5 text-gray-500" /></button>
                     </div>
-                    <button
-                      className="mt-2 text-xs underline text-amber-800 hover:text-amber-900"
-                      onClick={() => setShowOverlaps((v) => !v)}
-                    >
-                      {showOverlaps ? "Hide" : "View"} overlaps list
-                    </button>
-                    {showOverlaps && (
-                      <div className="mt-2 max-h-40 overflow-auto">
-                        <ul className="text-xs font-mono space-y-1">
-                          {overlaps.slice(0, 100).map((n) => (
-                            <li key={n}>{makeBarcode(cfg.prefix, n, padTo)}</li>
-                          ))}
-                          {overlaps.length > 100 && (
-                            <li className="italic">…and {overlaps.length - 100} more</li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-green-800 flex items-center gap-2">
-                    <Icon.Check className="w-4 h-4" />
-                    No overlaps detected — all {requested.length} items are new.
-                  </div>
-                )}
-              </div>
 
-              <div className="mt-5 flex justify-end gap-2">
-                <button onClick={() => setConfirm(null)} className="rounded-xl border px-4 py-2 text-sm">
-                  Cancel
-                </button>
-                {overlaps.length > 0 ? (
-                  <button
-                    onClick={() => completeJob(true)}
-                    className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium"
-                  >
-                    Skip overlaps & Continue
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => completeJob(false)}
-                    className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium"
-                  >
-                    Confirm
-                  </button>
-                )}
-              </div>
+                    <div className="mt-3 text-sm text-gray-700 space-y-3">
+                      <p>
+                        You are about to {confirm?.mode === "export" ? "export" : "print"} <strong>{requested.length}</strong> {typeConfigs[type].label.toLowerCase()} {confirm?.mode === "export" ? "barcodes" : "labels"}.
+                        <br/>Range: <code className="bg-gray-50 border rounded px-1">{startBarcode}</code> to <code className="bg-gray-50 border rounded px-1">{endBarcode}</code>
+                      </p>
+                      {confirm?.mode === "export" && (
+                        <p>Filename: <code className="bg-gray-50 border rounded px-1">{filename}</code></p>
+                      )}
+
+                      {overlaps.length > 0 ? (
+                        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+                          <div className="flex items-center gap-2 text-amber-800">
+                            <Icon.Alert className="w-4 h-4" />
+                            <span>
+                              {overlaps.length} overlaps found. Proceeding will <strong>skip</strong> overlaps and {confirm?.mode === "export" ? "export" : "print"} the remaining <strong>{uniques.length}</strong> unique items.
+                            </span>
+                          </div>
+                          <details className="mt-2">
+                            <summary className="text-xs underline cursor-pointer text-amber-800 hover:text-amber-900">View overlaps list</summary>
+                            <div className="mt-2 max-h-40 overflow-auto">
+                              <ul className="text-xs font-mono space-y-1">
+                                {overlaps.slice(0, 100).map((n) => (
+                                  <li key={n}>{makeBarcode(typeConfigs[type].prefix, n, Math.max(6, String(start + Math.max(0, qty) - 1).length))}</li>
+                                ))}
+                                {overlaps.length > 100 && <li className="italic">…and {overlaps.length - 100} more</li>}
+                              </ul>
+                            </div>
+                          </details>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-green-800 flex items-center gap-2"><Icon.Check className="w-4 h-4" />No overlaps detected — all {requested.length} items are new.</div>
+                      )}
+                    </div>
+
+                    <div className="mt-5 flex justify-end gap-2">
+                      <button onClick={() => setConfirm(null)} className="rounded-xl border px-4 py-2 text-sm">Cancel</button>
+                      {overlaps.length > 0 ? (
+                        <button onClick={() => { setConfirm(null); setToast(`Printing ${uniques.length} ${typeConfigs[type].label.toLowerCase()} ${confirm?.mode === "export" ? "barcodes" : "labels"} (skipped overlaps).`); }} className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium">Skip overlaps & Continue</button>
+                      ) : (
+                        <button onClick={() => { setConfirm(null); setToast(`${confirm?.mode === "export" ? "Exported" : "Printing"} ${requested.length} ${typeConfigs[type].label.toLowerCase()} ${confirm?.mode === "export" ? "barcodes" : "labels"}.`); }} className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium">Confirm</button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </Modal>
 
-            {/* Toast */}
             <Toast message={toast} onClose={() => setToast("")} />
           </div>
         );
