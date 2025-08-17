@@ -247,6 +247,12 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
     let xr = null;
     try {
       xr = await scene.createDefaultXRExperienceAsync({ disableDefaultUI:false });
+      // Auto-recenter as soon as we ENTER immersive VR
+      if (xr && xr.baseExperience) {
+        xr.baseExperience.onStateChangedObservable.add((state)=>{
+          if (state === BABYLON.WebXRState.IN_XR) recenterTable();
+        });
+      }
       // Controller buttons
       xr.input.onControllerAddedObservable.add((controller)=>{
         controller.onMotionControllerInitObservable.add((mc)=>{
@@ -262,21 +268,40 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
 
     // Recenter/orient the whole table to face the active camera
     function recenterTable(){
+      // Active camera (XR or desktop)
       const xrCam = (xr && xr.baseExperience && xr.baseExperience.camera) ? xr.baseExperience.camera : scene.activeCamera;
       const camPos = xrCam.globalPosition.clone();
-      const fwd = xrCam.getForwardRay(1).direction.clone(); fwd.y = 0; if (fwd.lengthSquared() < 1e-6) fwd.set(0,0,1); fwd.normalize();
-      const yaw = Math.atan2(fwd.x, fwd.z);
+
+      // Camera forward projected onto the table plane (Y=up)
+      const fwdWorld = xrCam.getForwardRay(1).direction.clone();
+      fwdWorld.y = 0; // ignore tilt
+      if (fwdWorld.lengthSquared() < 1e-6) fwdWorld.set(0,0,1);
+      fwdWorld.normalize();
+
+      // Yaw that aligns ROOT +Z roughly with camera forward
+      let yaw = Math.atan2(fwdWorld.x, fwdWorld.z);
+
+      // Apply yaw, but if after this ROOT+Z is opposite the camera forward (dot<0), flip 180°.
+      // This guards against differing forward conventions between desktop and XR cameras.
+      let rotMat = BABYLON.Matrix.RotationY(yaw);
+      let rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
+      if (BABYLON.Vector3.Dot(rootZWorld, fwdWorld) < 0) {
+        yaw += Math.PI;
+        rotMat = BABYLON.Matrix.RotationY(yaw);
+        rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
+      }
       root.rotation.set(0, yaw, 0);
-      const rotMat = BABYLON.Matrix.RotationY(yaw);
-      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge center in ROOT space
+
+      // Place the NEAR edge center a short distance in front of the camera along its forward.
+      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
       const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
-      const desiredNearWorld = camPos.add(fwd.scale(NEAR_FROM_CAMERA));
+      const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
       root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
 
-      // For desktop, also point the orbit target roughly at 20% into the table
+      // For desktop, also point the orbit target roughly into the table
       if (!xr) {
-        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_SIZE*0.2);
-        const lookWorld = root.getWorldMatrix().multiply(BABYLON.Matrix.RotationY(0)).transformCoordinates(lookLocal);
+        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_SIZE*0.25);
+        const lookWorld = BABYLON.Vector3.TransformCoordinates(lookLocal, root.getWorldMatrix());
         cam.setTarget(lookWorld);
       }
     }
