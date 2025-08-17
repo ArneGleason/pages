@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebXR Top‑Down Shooter • Babylon.js</title>
+  <!-- Babylon.js CDN -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; background: #0a0b10; }
+    #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+  </style>
+</head>
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <script>
+  // --- Basic engine/scene setup ---
+  const canvas = document.getElementById('renderCanvas');
+  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+
+  async function createScene() {
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.06, 1);
+
+    // Desktop camera (XR will replace at runtime)
+    const cam = new BABYLON.ArcRotateCamera("cam",
+      Math.PI / 2, BABYLON.Tools.ToRadians(70), 5,
+      new BABYLON.Vector3(0, 0, 2), scene);
+    cam.attachControl(canvas, true);
+    cam.wheelPrecision = 80;
+    cam.lowerBetaLimit = BABYLON.Tools.ToRadians(50);
+    cam.upperBetaLimit = BABYLON.Tools.ToRadians(88);
+
+    new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
+
+    // --- Tabletop board & scrolling ground ---
+    const BOARD_W = 2.8;   // meters (x)
+    const BOARD_H = 5.6;   // meters (z)
+
+    const board = BABYLON.MeshBuilder.CreateGround("board", {
+      width: BOARD_W, height: BOARD_H, subdivisions: 1
+    }, scene);
+    board.position.set(0, 0, 2.2); // a couple meters in front
+    board.isPickable = true;
+
+    const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+    groundMat.specularColor = BABYLON.Color3.Black();
+    const groundTex = new BABYLON.Texture("https://assets.babylonjs.com/environments/grass.jpg", scene);
+    groundTex.uScale = 12; // tiling
+    groundTex.vScale = 24;
+    groundMat.diffuseTexture = groundTex;
+    board.material = groundMat;
+
+    // --- Player ship ---
+    const ship = BABYLON.MeshBuilder.CreateBox("ship", { width: 0.2, height: 0.08, depth: 0.3 }, scene);
+    const shipMat = new BABYLON.StandardMaterial("shipMat", scene);
+    shipMat.emissiveColor = new BABYLON.Color3(0.85, 0.9, 1);
+    shipMat.specularColor = BABYLON.Color3.Black();
+    ship.material = shipMat;
+    ship.position = new BABYLON.Vector3(0, 0.05, board.position.z - BOARD_H / 2 + 0.4);
+
+    // cosmetic fin
+    const fin = BABYLON.MeshBuilder.CreateBox("fin", { width: 0.02, height: 0.08, depth: 0.12 }, scene);
+    fin.material = new BABYLON.StandardMaterial("finMat", scene);
+    fin.material.emissiveColor = new BABYLON.Color3(0.3, 0.6, 1);
+    fin.position = new BABYLON.Vector3(0, 0.09, 0.02);
+    fin.parent = ship;
+
+    // Target cursor (where the ship tries to go with acceleration)
+    const cursor = BABYLON.MeshBuilder.CreateDisc("cursor", { radius: 0.07, tessellation: 32 }, scene);
+    const cursorMat = new BABYLON.StandardMaterial("cursorMat", scene);
+    cursorMat.emissiveColor = new BABYLON.Color3(0.1, 0.85, 1);
+    cursor.material = cursorMat;
+    cursor.rotation.x = Math.PI / 2;
+    cursor.position.set(0, 0.01, ship.position.z + 0.7);
+
+    // Movement model (inertia)
+    const target = cursor.position.clone();
+    const vel = new BABYLON.Vector3();
+    const maxSpeed = 2.2;     // m/s
+    const maxAccel = 6.5;     // m/s^2
+    const damping = 0.92;     // per-second damping factor
+
+    function clampToBoard(vec, margin = 0.14) {
+      const minX = board.position.x - BOARD_W / 2 + margin;
+      const maxX = board.position.x + BOARD_W / 2 - margin;
+      const minZ = board.position.z - BOARD_H / 2 + margin;
+      const maxZ = board.position.z + BOARD_H / 2 - margin;
+      vec.x = Math.max(minX, Math.min(maxX, vec.x));
+      vec.z = Math.max(minZ, Math.min(maxZ, vec.z));
+      return vec;
+    }
+
+    // Desktop pointer steering
+    scene.onPointerMove = () => {
+      const pick = scene.pick(scene.pointerX, scene.pointerY, m => m === board);
+      if (pick && pick.hit) {
+        target.copyFrom(pick.pickedPoint);
+        target.y = ship.position.y;
+        clampToBoard(target);
+        cursor.position.copyFrom(target);
+      }
+    };
+
+    // --- Bullets (pooled) ---
+    const bulletPool = [];
+    const BULLET_SPEED = 6.5;
+    const BULLET_LIFE = 1.25; // seconds
+    const BULLET_RATE = 0.12; // seconds between shots
+    let lastShotTime = -999;
+
+    function makeBullet() {
+      const mesh = BABYLON.MeshBuilder.CreateCylinder("bullet", { diameter: 0.03, height: 0.2 }, scene);
+      mesh.rotation.x = Math.PI / 2;
+      const mat = new BABYLON.StandardMaterial("bMat", scene);
+      mat.emissiveColor = new BABYLON.Color3(1, 0.92, 0.3);
+      mat.specularColor = BABYLON.Color3.Black();
+      mesh.material = mat;
+      mesh.setEnabled(false);
+      return { mesh, active: false, vel: new BABYLON.Vector3(), t: 0 };
+    }
+    for (let i = 0; i < 48; i++) bulletPool.push(makeBullet());
+
+    function shoot() {
+      const now = performance.now() / 1000;
+      if (now - lastShotTime < BULLET_RATE) return;
+      lastShotTime = now;
+      const b = bulletPool.find(x => !x.active);
+      if (!b) return;
+      b.active = true; b.t = 0;
+      b.mesh.setEnabled(true);
+      b.mesh.position.copyFrom(ship.position);
+      b.mesh.position.y = ship.position.y + 0.01;
+      b.vel.set(0, 0, BULLET_SPEED); // +z along the board
+    }
+
+    // Desktop shoot + pause
+    scene.onPointerDown = (evt) => { if (evt.button === 0) shoot(); };
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') shoot();
+      if (e.code === 'Enter') setRunning(!running);
+    });
+
+    // --- Drones (simple enemies) ---
+    const drones = [];
+    const droneMat = new BABYLON.StandardMaterial("droneMat", scene);
+    droneMat.diffuseColor = new BABYLON.Color3(1, 0.35, 0.35);
+
+    function makeDrone() {
+      const mesh = BABYLON.MeshBuilder.CreateSphere("drone", { diameter: 0.24, segments: 10 }, scene);
+      mesh.material = droneMat;
+      mesh.position.y = ship.position.y + 0.02;
+      const drone = { mesh, speed: 0.9 + Math.random() * 0.7 };
+      respawnDrone(drone);
+      return drone;
+    }
+
+    function respawnDrone(d) {
+      const margin = 0.16;
+      d.mesh.position.x = board.position.x - BOARD_W / 2 + margin + Math.random() * (BOARD_W - 2 * margin);
+      d.mesh.position.z = board.position.z + BOARD_H / 2 - 0.28; // far edge
+      d.speed = 0.9 + Math.random() * 0.7;
+    }
+
+    for (let i = 0; i < 12; i++) drones.push(makeDrone());
+
+    // --- Explosions ---
+    function explode(at) {
+      const ps = new BABYLON.ParticleSystem("expl", 100, scene);
+      ps.particleTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/flare.png", scene);
+      ps.emitter = at.clone();
+      ps.minEmitPower = 1; ps.maxEmitPower = 2.2;
+      ps.minSize = 0.03; ps.maxSize = 0.09;
+      ps.color1 = new BABYLON.Color4(1, 0.8, 0.3, 1);
+      ps.color2 = new BABYLON.Color4(1, 0.2, 0, 1);
+      ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
+      ps.gravity = new BABYLON.Vector3(0, 0, 0);
+      ps.emitRate = 0; // manual burst
+      ps.createSphereEmitter(0.22);
+      ps.disposeOnStop = true;
+      ps.manualEmitCount = 60; ps.start(); setTimeout(() => ps.stop(), 80);
+    }
+
+    // --- GUI (score + pause indicator) ---
+    const gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
+    const scoreText = new BABYLON.GUI.TextBlock();
+    scoreText.color = "white"; scoreText.fontSize = 24; scoreText.top = "-45%";
+    gui.addControl(scoreText);
+    const hintText = new BABYLON.GUI.TextBlock();
+    hintText.text = "Desktop: move mouse to steer, Space to shoot, Enter to Start/Pause.\nQuest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
+    hintText.color = "#eef"; hintText.fontSize = 18; hintText.top = "-40%";
+    gui.addControl(hintText);
+    const pauseText = new BABYLON.GUI.TextBlock();
+    pauseText.text = "PAUSED"; pauseText.color = "#fff"; pauseText.fontSize = 42; pauseText.isVisible = true;
+    gui.addControl(pauseText);
+
+    let running = false; let score = 0;
+    function setRunning(v) { running = v; pauseText.isVisible = !v; }
+
+    // --- WebXR setup ---
+    let xr = null;
+    try {
+      xr = await scene.createDefaultXRExperienceAsync({ disableDefaultUI: false });
+      // Controller buttons: trigger = shoot, A/X = pause
+      xr.input.onControllerAddedObservable.add((controller) => {
+        controller.onMotionControllerInitObservable.add((mc) => {
+          const trigger = mc.getComponentOfType("trigger");
+          if (trigger) {
+            trigger.onButtonStateChangedObservable.add((comp) => {
+              if (comp.changes.pressed && comp.pressed) shoot();
+            });
+          }
+          const aBtn = mc.getComponent("a-button") || mc.getComponent("x-button");
+          if (aBtn) {
+            aBtn.onButtonStateChangedObservable.add((comp) => {
+              if (comp.changes.pressed && comp.pressed) setRunning(!running);
+            });
+          }
+        });
+      });
+    } catch (e) {
+      console.warn("WebXR unavailable or failed to init.", e);
+    }
+
+    // Controller ray -> board picking (updates target continuously)
+    function steerFromXRControllers() {
+      if (!xr) return;
+      xr.input.controllers.forEach((ctrl) => {
+        const pointer = ctrl.pointer; if (!pointer) return;
+        const origin = pointer.getAbsolutePosition();
+        const fwd = pointer.getDirection(BABYLON.Axis.Z); // controller forward
+        const ray = new BABYLON.Ray(origin, fwd, 10);
+        const pick = scene.pickWithRay(ray, (m) => m === board);
+        if (pick && pick.hit) {
+          target.copyFrom(pick.pickedPoint); target.y = ship.position.y;
+          clampToBoard(target);
+          cursor.position.copyFrom(target);
+        }
+      });
+    }
+
+    // --- Frame update ---
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = engine.getDeltaTime() / 1000;
+
+      // Always allow steering updates (even when paused) so the player can aim where to move next.
+      steerFromXRControllers();
+
+      // Update GUI text
+      scoreText.text = `Score: ${score} ${running ? '' : '(paused)'}`;
+
+      if (!running) return; // game logic frozen
+
+      // Scroll ground to simulate forward flight
+      const scrollSpeed = 0.45; // texture scroll speed
+      groundTex.vOffset += dt * scrollSpeed * 0.3;
+
+      // Ship movement toward target with acceleration limits + damping
+      clampToBoard(target);
+      const toTarget = target.subtract(ship.position);
+      const dist = toTarget.length();
+      if (dist > 1e-4) {
+        const desiredVel = toTarget.scale(maxSpeed / Math.max(dist, 1e-4));
+        const dv = desiredVel.subtract(vel);
+        const maxDv = maxAccel * dt;
+        const dvLen = dv.length();
+        if (dvLen > maxDv) dv.scaleInPlace(maxDv / Math.max(dvLen, 1e-4));
+        vel.addInPlace(dv);
+      }
+      vel.scaleInPlace(Math.pow(damping, dt));
+      ship.position.addInPlace(vel.scale(dt));
+      clampToBoard(ship.position);
+
+      // Bullets
+      for (const b of bulletPool) {
+        if (!b.active) continue;
+        b.t += dt;
+        b.mesh.position.addInPlace(b.vel.scale(dt));
+        // off-board or expired
+        if (b.t > BULLET_LIFE || b.mesh.position.z > board.position.z + BOARD_H / 2) {
+          b.active = false; b.mesh.setEnabled(false);
+        }
+      }
+
+      // Enemies approach player
+      for (const d of drones) {
+        d.mesh.position.z -= d.speed * dt; // toward near edge
+        if (d.mesh.position.z < board.position.z - BOARD_H / 2 + 0.22) {
+          respawnDrone(d);
+        }
+      }
+
+      // Bullet vs Drone collisions (simple 2D circle check in XZ)
+      outer: for (const d of drones) {
+        for (const b of bulletPool) {
+          if (!b.active) continue;
+          const dx = b.mesh.position.x - d.mesh.position.x;
+          const dz = b.mesh.position.z - d.mesh.position.z;
+          if (dx * dx + dz * dz < 0.11 * 0.11) {
+            explode(d.mesh.position);
+            score += 100;
+            respawnDrone(d);
+            b.active = false; b.mesh.setEnabled(false);
+            continue outer;
+          }
+        }
+      }
+    });
+
+    return scene;
+  }
+
+  createScene().then(scene => {
+    engine.runRenderLoop(() => scene.render());
+  });
+  window.addEventListener('resize', () => engine.resize());
+  </script>
+</body>
+</html>
