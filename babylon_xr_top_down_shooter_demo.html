@@ -23,6 +23,10 @@
     const scene = new BABYLON.Scene(engine);
     scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.06, 1);
 
+    // Root transform so we can rotate the whole table 180° around Y as requested
+    const root = new BABYLON.TransformNode("root", scene);
+    root.rotation.y = Math.PI; // flip so +Z in local goes AWAY from you
+
     // Desktop camera (XR will replace at runtime)
     const cam = new BABYLON.ArcRotateCamera("cam",
       Math.PI / 2, BABYLON.Tools.ToRadians(70), 5,
@@ -34,27 +38,29 @@
 
     new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
 
-    // --- Tabletop board & scrolling ground (flipped so ground comes TOWARD player) ---
+    // --- Tabletop board & scrolling ground ---
     const BOARD_W = 2.8;   // meters (x)
     const BOARD_H = 5.6;   // meters (z)
 
     const board = BABYLON.MeshBuilder.CreateGround("board", {
       width: BOARD_W, height: BOARD_H, subdivisions: 1
     }, scene);
+    board.parent = root;
     board.position.set(0, 0, 2.6); // comfortably in front
     board.isPickable = true;
 
-    // Base ground texture (subtle rock) + overlaid scrolling grid for speed lines
+    // Base ground material (cool slate tone) + overlaid scrolling grid for speed lines
     const baseMat = new BABYLON.StandardMaterial("baseMat", scene);
     baseMat.specularColor = BABYLON.Color3.Black();
+    baseMat.diffuseColor = new BABYLON.Color3(0.12, 0.20, 0.30); // slate/teal — distinct from enemy dots
     const baseTex = new BABYLON.Texture("https://assets.babylonjs.com/environments/rockyGround.jpg", scene);
-    baseTex.uScale = 10;
-    baseTex.vScale = 20;
+    baseTex.uScale = 10; baseTex.vScale = 20; // subtle detail
     baseMat.diffuseTexture = baseTex;
     board.material = baseMat;
 
     // Grid overlay plane (very close above board) for parallax lines
     const overlay = BABYLON.MeshBuilder.CreateGround("overlay", { width: BOARD_W, height: BOARD_H }, scene);
+    overlay.parent = root;
     overlay.position = board.position.clone();
     overlay.position.y += 0.002;
     const gridMat = new BABYLON.StandardMaterial("gridMat", scene);
@@ -66,12 +72,12 @@
     function drawGrid() {
       ctx.clearRect(0,0,256,256);
       ctx.fillStyle = "rgba(0,0,0,0)"; ctx.fillRect(0,0,256,256);
-      ctx.strokeStyle = "rgba(220,240,255,0.25)"; ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(200,230,255,0.25)"; ctx.lineWidth = 2; // light cyan
       for (let i=0;i<=256;i+=32){
         ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,256); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(256,i); ctx.stroke();
       }
-      ctx.strokeStyle = "rgba(120,200,255,0.35)"; ctx.lineWidth = 2.5; // majors
+      ctx.strokeStyle = "rgba(120,200,255,0.38)"; ctx.lineWidth = 2.5; // majors
       for (let i=0;i<=256;i+=128){
         ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,256); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(256,i); ctx.stroke();
@@ -84,10 +90,10 @@
     gridTex.uScale = 8; gridTex.vScale = 16; // tiling
     overlay.material = gridMat;
 
-    // --- Player ship (upped geometry & facing AWAY from player) ---
+    // --- Player ship (upped geometry) ---
     // Build from simple pieces then merge
     const fuselage = BABYLON.MeshBuilder.CreateCapsule("fuselage", { height: 0.38, radius: 0.055, tessellation: 8 }, scene);
-    fuselage.rotation.x = Math.PI/2; // point along +Z
+    fuselage.rotation.x = Math.PI/2; // point along +Z (local to root)
     const nose = BABYLON.MeshBuilder.CreateCylinder("nose", { diameterTop: 0, diameterBottom: 0.12, height: 0.18, tessellation: 8 }, scene);
     nose.rotation.x = Math.PI/2; nose.position.z = 0.23;
     const wingL = BABYLON.MeshBuilder.CreateBox("wingL", { width: 0.26, height: 0.01, depth: 0.1 }, scene); wingL.position.x=-0.16;
@@ -98,6 +104,7 @@
     shipMat.diffuseColor = new BABYLON.Color3(0.05, 0.1, 0.15);
     ;[fuselage, nose, wingL, wingR, tail].forEach(m=>m.material = shipMat);
     const ship = BABYLON.Mesh.MergeMeshes([fuselage, nose, wingL, wingR, tail], true, true, undefined, false, true);
+    ship.parent = root;
 
     ship.position = new BABYLON.Vector3(0, 0.05, board.position.z - BOARD_H / 2 + 0.45); // near edge
 
@@ -109,8 +116,9 @@
     glowMat.emissiveColor = new BABYLON.Color3(0.2, 0.7, 1);
     glowMat.alpha = 0.6; glow.material = glowMat; glow.parent = ship;
 
-    // Target cursor (where the ship tries to go with smoothing)
+    // Target cursor (where the ship tries to go with smoothing) — in ROOT LOCAL space
     const cursor = BABYLON.MeshBuilder.CreateDisc("cursor", { radius: 0.07, tessellation: 32 }, scene);
+    cursor.parent = root;
     const cursorMat = new BABYLON.StandardMaterial("cursorMat", scene);
     cursorMat.emissiveColor = new BABYLON.Color3(0.1, 0.85, 1);
     cursor.material = cursorMat;
@@ -118,8 +126,8 @@
     cursor.position.set(0, 0.01, ship.position.z + 0.7);
 
     // Movement model: critically‑damped spring + arrival slow‑down (tighter, no wobble)
-    const target = cursor.position.clone();
-    let vel = new BABYLON.Vector3();
+    const target = cursor.position.clone(); // **root-local**
+    let vel = new BABYLON.Vector3();        // **root-local**
     const MAX_SPEED = 1.6;          // m/s cap
     const MAX_ACCEL = 7.0;          // m/s^2 cap
     const STIFFNESS = 18.0;         // spring stiffness (higher = snappier)
@@ -137,18 +145,25 @@
       return vec;
     }
 
-    // Desktop pointer steering
+    // Helper: convert a WORLD-space point to ROOT-local
+    function worldToRoot(p) {
+      const inv = root.getWorldMatrix().clone(); inv.invert();
+      return BABYLON.Vector3.TransformCoordinates(p, inv);
+    }
+
+    // Desktop pointer steering (pick world → convert to root-local)
     scene.onPointerMove = () => {
       const pick = scene.pick(scene.pointerX, scene.pointerY, m => m === board);
       if (pick && pick.hit) {
-        target.copyFrom(pick.pickedPoint);
+        const lp = worldToRoot(pick.pickedPoint);
+        target.copyFrom(lp);
         target.y = ship.position.y;
         clampToBoard(target);
         cursor.position.copyFrom(target);
       }
     };
 
-    // --- Bullets (pooled) ---
+    // --- Bullets (pooled) — parented to root; move in ROOT-LOCAL +Z (ship nose) ---
     const bulletPool = [];
     const BULLET_SPEED = 6.5;
     const BULLET_LIFE = 1.25; // seconds
@@ -157,20 +172,16 @@
 
     function makeBullet() {
       const mesh = BABYLON.MeshBuilder.CreateCylinder("bullet", { diameter: 0.03, height: 0.2 }, scene);
+      mesh.parent = root;
       mesh.rotation.x = Math.PI / 2;
       const mat = new BABYLON.StandardMaterial("bMat", scene);
-      mat.emissiveColor = new BABYLON.Color3(1, 0.92, 0.3);
+      mat.emissiveColor = new BABYLON.Color3(1, 0.95, 0.4); // yellowish, less red
       mat.specularColor = BABYLON.Color3.Black();
       mesh.material = mat;
       mesh.setEnabled(false);
-      return { mesh, active: false, vel: new BABYLON.Vector3(), t: 0 };
+      return { mesh, active: false, vel: new BABYLON.Vector3(0,0,BULLET_SPEED), t: 0 };
     }
     for (let i = 0; i < 60; i++) bulletPool.push(makeBullet());
-
-    function shipForward() {
-      // +Z in local space is the ship's nose
-      return BABYLON.Vector3.TransformNormal(BABYLON.Axis.Z, ship.getWorldMatrix()).normalize();
-    }
 
     function shoot() {
       const now = performance.now() / 1000;
@@ -182,7 +193,6 @@
       b.mesh.setEnabled(true);
       b.mesh.position.copyFrom(ship.position);
       b.mesh.position.y = ship.position.y + 0.01;
-      b.vel.copyFrom(shipForward().scale(BULLET_SPEED)); // always out the nose (away from player)
     }
 
     // Desktop shoot + pause
@@ -195,10 +205,12 @@
     // --- Drones (simple enemies) ---
     const drones = [];
     const droneMat = new BABYLON.StandardMaterial("droneMat", scene);
-    droneMat.diffuseColor = new BABYLON.Color3(1, 0.35, 0.35);
+    droneMat.diffuseColor = new BABYLON.Color3(1.0, 0.83, 0.3); // warm yellow dots
+    droneMat.emissiveColor = new BABYLON.Color3(0.9, 0.75, 0.25);
 
     function makeDrone() {
       const mesh = BABYLON.MeshBuilder.CreateSphere("drone", { diameter: 0.24, segments: 10 }, scene);
+      mesh.parent = root;
       mesh.material = droneMat;
       mesh.position.y = ship.position.y + 0.02;
       const drone = { mesh, speed: 0.9 + Math.random() * 0.7 };
@@ -215,15 +227,15 @@
 
     for (let i = 0; i < 12; i++) drones.push(makeDrone());
 
-    // --- Explosions ---
+    // --- Explosions (less red) ---
     function explode(at) {
       const ps = new BABYLON.ParticleSystem("expl", 100, scene);
       ps.particleTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/flare.png", scene);
       ps.emitter = at.clone();
       ps.minEmitPower = 1; ps.maxEmitPower = 2.2;
       ps.minSize = 0.03; ps.maxSize = 0.09;
-      ps.color1 = new BABYLON.Color4(1, 0.8, 0.3, 1);
-      ps.color2 = new BABYLON.Color4(1, 0.2, 0, 1);
+      ps.color1 = new BABYLON.Color4(1, 0.95, 0.5, 1); // golden
+      ps.color2 = new BABYLON.Color4(1, 0.7, 0.2, 1);  // amber
       ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
       ps.gravity = new BABYLON.Vector3(0, 0, 0);
       ps.emitRate = 0; // manual burst
@@ -274,17 +286,18 @@ Quest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
       console.warn("WebXR unavailable or failed to init.", e);
     }
 
-    // Controller ray -> board picking (updates target continuously)
+    // Controller ray -> board picking (pick in WORLD, convert to ROOT-LOCAL)
     function steerFromXRControllers() {
       if (!xr) return;
       xr.input.controllers.forEach((ctrl) => {
         const pointer = ctrl.pointer; if (!pointer) return;
         const origin = pointer.getAbsolutePosition();
-        const fwd = pointer.getDirection(BABYLON.Axis.Z); // controller forward
+        const fwd = pointer.getDirection(BABYLON.Axis.Z); // controller forward (WORLD)
         const ray = new BABYLON.Ray(origin, fwd, 10);
         const pick = scene.pickWithRay(ray, (m) => m === board);
         if (pick && pick.hit) {
-          target.copyFrom(pick.pickedPoint); target.y = ship.position.y;
+          const lp = worldToRoot(pick.pickedPoint);
+          target.copyFrom(lp); target.y = ship.position.y;
           clampToBoard(target);
           cursor.position.copyFrom(target);
         }
@@ -301,14 +314,14 @@ Quest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
       // Update GUI text
       scoreText.text = `Score: ${score} ${running ? '' : '(paused)'}`;
 
-      // Scroll ground so it moves TOWARD the player
+      // Scroll ground so it moves TOWARD the player (parallax)
       const scrollSpeed = 0.45; // base
       baseTex.vOffset -= dt * scrollSpeed * 0.3;
       gridTex.vOffset -= dt * scrollSpeed * 0.9;
 
       if (!running) return; // game logic frozen
 
-      // Ship movement using critically‑damped spring + arrival slowdown
+      // Ship movement using critically‑damped spring + arrival slowdown (root-local)
       clampToBoard(target);
       const toTarget = target.subtract(ship.position);
       const dist = toTarget.length();
@@ -325,7 +338,7 @@ Quest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
       // Integrate velocity, clamp speed
       vel.addInPlace(acc.scale(dt));
       const speed = vel.length();
-      const maxSp = MAX_SPEED * (0.6 + 0.4*arriveFactor); // also taper top speed a bit when close
+      const maxSp = MAX_SPEED * (0.6 + 0.4*arriveFactor); // taper top speed when close
       if (speed > maxSp) vel.scaleInPlace(maxSp / speed);
 
       // Integrate position
@@ -338,7 +351,7 @@ Quest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
         vel.scaleInPlace(0);
       }
 
-      // Bullets
+      // Bullets (root-local)
       for (const b of bulletPool) {
         if (!b.active) continue;
         b.t += dt;
@@ -349,7 +362,7 @@ Quest VR: point to steer, Trigger to shoot, A/X to Start/Pause.";
         }
       }
 
-      // Enemies approach player (from far edge toward ship)
+      // Enemies approach player (from far edge toward ship) in root-local
       for (const d of drones) {
         d.mesh.position.z -= d.speed * dt; // toward near edge
         if (d.mesh.position.z < board.position.z - BOARD_H / 2 + 0.22) {
