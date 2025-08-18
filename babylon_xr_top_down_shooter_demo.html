@@ -34,7 +34,7 @@
     const TABLE_Y    = 0.90;      // desk height
     const NEAR_FROM_CAMERA = 0.18; // near edge ~18cm from you
     const MARGIN     = 0.08;      // clamp margin from edges
-    const RECENTER_WORLD_Z = 0.9144; // 3 ft farther along world +Z when recentering
+    const RECENTER_WORLD_Y = 0.76; // ~30 in (0.76 m) fixed world height for tabletop
 
     // Root that holds the entire game so we can rotate/position as one
     const root = new BABYLON.TransformNode('root', scene);
@@ -286,15 +286,29 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
       if (fwdWorld.lengthSquared() < 1e-6) fwdWorld.set(0,0,1);
       fwdWorld.normalize();
 
-      // Yaw that aligns ROOT +Z roughly with camera forward
+      // Yaw that aligns ROOT +Z with camera forward
       let yaw = Math.atan2(fwdWorld.x, fwdWorld.z);
-
-      // Ensure ROOT +Z matches camera forward (not opposite)
       let rotMat = BABYLON.Matrix.RotationY(yaw);
-      let rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
+      const rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
       if (BABYLON.Vector3.Dot(rootZWorld, fwdWorld) < 0) {
         yaw += Math.PI; rotMat = BABYLON.Matrix.RotationY(yaw);
       }
+      root.rotation.set(0, yaw, 0);
+
+      // Place the NEAR edge center a short distance in front of the camera at a FIXED world height.
+      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
+      const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
+      const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
+      desiredNearWorld.y = RECENTER_WORLD_Y; // <-- lock height so the board is below eye level
+      root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
+
+      // For desktop, also point the orbit target roughly into the table
+      if (!xr) {
+        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_SIZE*0.25);
+        const lookWorld = BABYLON.Vector3.TransformCoordinates(lookLocal, root.getWorldMatrix());
+        cam.setTarget(lookWorld);
+      }
+    }
       root.rotation.set(0, yaw, 0);
 
       // Place the NEAR edge center a short distance in front of the camera.
