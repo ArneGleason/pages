@@ -220,7 +220,7 @@
     // Tiny homing parameters
     const TRACK_GAIN = 2.5;                 // how strongly bullets drift toward target
     const MAX_LATERAL_SPEED_BULLET = 1.2;   // clamp for side drift (m/s)
-    let lastShotTime = -999; = -999;
+    let lastShotTime = -999;
 
     function makeBullet() {
       const mesh = BABYLON.MeshBuilder.CreateCylinder('bullet', { diameter: 0.03, height: 0.20 }, scene);
