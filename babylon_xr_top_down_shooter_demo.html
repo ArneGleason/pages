@@ -34,6 +34,7 @@
     const TABLE_Y    = 0.90;      // desk height
     const NEAR_FROM_CAMERA = 0.18; // near edge ~18cm from you
     const MARGIN     = 0.08;      // clamp margin from edges
+    const RECENTER_WORLD_Y = 0.9144; // 3 ft above floor (world Y) for tabletop placement
 
     // Root that holds the entire game so we can rotate/position as one
     const root = new BABYLON.TransformNode('root', scene);
@@ -218,10 +219,15 @@
 
     // --- Explosions (use absolute position so orientation is always correct) ---
     function explodeAtMesh(m){
-      const worldPos = m.getAbsolutePosition();
+      // Create an anchor at the drone's absolute world position so the explosion
+      // is decoupled from any immediate respawn or root transforms.
+      const worldPos = m.getAbsolutePosition().clone();
+      const anchor = new BABYLON.TransformNode('explAnchor', scene);
+      anchor.position.copyFrom(worldPos);
+
       const ps = new BABYLON.ParticleSystem('expl', 120, scene);
       ps.particleTexture = new BABYLON.Texture('https://playground.babylonjs.com/textures/flare.png', scene);
-      ps.emitter = worldPos;
+      ps.emitter = anchor; // bind to fixed world-space anchor
       ps.minEmitPower = 1; ps.maxEmitPower = 2.2;
       ps.minSize = 0.03; ps.maxSize = 0.09;
       ps.color1 = new BABYLON.Color4(1, 0.95, 0.5, 1);
@@ -229,7 +235,9 @@
       ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
       ps.gravity = new BABYLON.Vector3(0, 0, 0);
       ps.emitRate = 0; ps.createSphereEmitter(0.22);
-      ps.disposeOnStop = true; ps.manualEmitCount = 60; ps.start(); setTimeout(()=>ps.stop(), 80);
+      ps.disposeOnStop = true; ps.manualEmitCount = 60; ps.start();
+      setTimeout(()=>ps.stop(), 80);
+      ps.onStoppedObservable.add(()=>anchor.dispose());
     }
 
     // --- GUI (score + pause + recenter hint) ---
@@ -281,21 +289,20 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
       // Yaw that aligns ROOT +Z roughly with camera forward
       let yaw = Math.atan2(fwdWorld.x, fwdWorld.z);
 
-      // Apply yaw, but if after this ROOT+Z is opposite the camera forward (dot<0), flip 180°.
-      // This guards against differing forward conventions between desktop and XR cameras.
+      // Ensure ROOT +Z matches camera forward (not opposite)
       let rotMat = BABYLON.Matrix.RotationY(yaw);
       let rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
       if (BABYLON.Vector3.Dot(rootZWorld, fwdWorld) < 0) {
-        yaw += Math.PI;
-        rotMat = BABYLON.Matrix.RotationY(yaw);
-        rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
+        yaw += Math.PI; rotMat = BABYLON.Matrix.RotationY(yaw);
       }
       root.rotation.set(0, yaw, 0);
 
-      // Place the NEAR edge center a short distance in front of the camera along its forward.
+      // Place the NEAR edge center a short distance in front of the camera,
+      // but clamp the TABLE HEIGHT to a fixed world Y = 3 ft (0.9144 m).
       const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
       const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
       const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
+      desiredNearWorld.y = RECENTER_WORLD_Y; // <-- fixed height above floor
       root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
 
       // For desktop, also point the orbit target roughly into the table
