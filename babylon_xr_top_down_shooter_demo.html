@@ -35,6 +35,9 @@
     const TABLE_L = 40 * FT;      // 12.192 m (length, Z)
     const TABLE_Y = 0.90;         // local table height within the root
     const MARGIN  = 0.08;         // clamp margin from edges
+    // Drop the board surface a few feet below the ship/drones
+    const BOARD_DROP = 0.9;       // meters (~3 ft)
+    const BOARD_Y = TABLE_Y - BOARD_DROP; // board height (root-local)
 
     // Recenter offsets (editable via UI)
     let offsetY = 0.76;   // world Y height for the near edge center (default ~30")
@@ -64,7 +67,7 @@
       width: TABLE_W, height: TABLE_L, subdivisions: 1
     }, scene);
     board.parent = root;
-    board.position.set(0, TABLE_Y, 0);
+    board.position.set(0, BOARD_Y, 0);
     board.isPickable = true;
 
     // Ground material (cool slate) + scrolling grid overlay for motion cues
@@ -98,6 +101,8 @@
     gridTex.uScale = Math.max(24, Math.round(TABLE_W * 4));
     gridTex.vScale = Math.max(32, Math.round(TABLE_L * 4));
     overlay.material = gridMat;
+    // keep overlay riding just above the board even after dropping the board
+    overlay.position = board.position.clone(); overlay.position.y += 0.002;
 
     // --- Player ship (root-local), facing +Z ---
     const fuselage = BABYLON.MeshBuilder.CreateCapsule('fuse', { height: 0.36, radius: 0.055, tessellation: 8 }, scene);
@@ -139,6 +144,12 @@
     const DAMPING     = 2 * Math.sqrt(STIFFNESS) * 0.95; // ~critically damped
     const SLOW_RADIUS = 0.9;                 // ease-in radius
     const ARRIVE_EPS  = 0.02;
+
+    // Banking visuals (roll around Z based on lateral velocity)
+    let bankAngle = 0;
+    const BANK_FACTOR = 0.6;                            // how much to bank per m/s lateral
+    const MAX_BANK = BABYLON.Tools.ToRadians(18);       // clamp
+    const BANK_SMOOTH = 10;                             // lerp speed
 
     function clampLocalToBoard(vec) {
       const minX = -TABLE_W/2 + MARGIN;
@@ -206,8 +217,9 @@
     // --- Drones (root-local) ---
     const drones = [];
     const droneMat = new BABYLON.StandardMaterial('droneMat', scene);
-    droneMat.diffuseColor = new BABYLON.Color3(1.0, 0.83, 0.30); // warm yellow
-    droneMat.emissiveColor = new BABYLON.Color3(0.9, 0.75, 0.25);
+    // Darker orange drones
+    droneMat.diffuseColor = new BABYLON.Color3(0.85, 0.40, 0.12);
+    droneMat.emissiveColor = new BABYLON.Color3(0.60, 0.28, 0.06);
 
     function makeDrone(){
       const mesh = BABYLON.MeshBuilder.CreateSphere('drone', { diameter:0.24, segments:10 }, scene);
@@ -344,7 +356,7 @@ Quest: point steer, Trigger shoot, A/X Start/Pause, B/Y Recenter.`;
       root.rotation.set(0, yaw, 0);
 
       // Place the NEAR edge center offsetZ in front of camera at height offsetY
-      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_L/2); // near edge in ROOT space
+      const localNearCenter = new BABYLON.Vector3(0, BOARD_Y, -TABLE_L/2); // near edge in ROOT space
       const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
       const desiredNearWorld = camPos.add(fwdWorld.scale(offsetZ));
       desiredNearWorld.y = offsetY; // lock tabletop height
@@ -403,6 +415,11 @@ Quest: point steer, Trigger shoot, A/X Start/Pause, B/Y Recenter.`;
       if (speed > maxSp) vel.scaleInPlace(maxSp/speed);
       ship.position.addInPlace(vel.scale(dt)); clampLocalToBoard(ship.position);
       if (dist < ARRIVE_EPS && speed < 0.05){ ship.position.copyFrom(target); vel.scaleInPlace(0); }
+
+      // Visual bank based on lateral velocity (no heading change)
+      const desiredBank = BABYLON.Scalar.Clamp(-vel.x * BANK_FACTOR, -MAX_BANK, MAX_BANK);
+      bankAngle += (desiredBank - bankAngle) * Math.min(1, dt * BANK_SMOOTH);
+      ship.rotation.z = bankAngle;
 
       // Bullets (root-local motion)
       for (const b of bulletPool){
