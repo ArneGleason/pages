@@ -28,6 +28,8 @@
   async function createScene() {
     const scene = new BABYLON.Scene(engine);
     scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.06, 1);
+    // Add an environment map so PBR metal looks good
+    scene.environmentTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("https://assets.babylonjs.com/environments/environmentSpecular.env", scene);
 
     // --- Constants (meters) ---
     const FT = 0.3048;
@@ -72,7 +74,7 @@
 
     // Ground material (cool slate) + scrolling grid overlay for motion cues
     const groundMat = new BABYLON.StandardMaterial('groundMat', scene);
-    groundMat.diffuseColor = new BABYLON.Color3(0.10, 0.18, 0.26); // slate/teal tone
+    groundMat.diffuseColor = new BABYLON.Color3(0.02, 0.08, 0.18); // darker ocean blue // slate/teal tone
     groundMat.specularColor = BABYLON.Color3.Black();
     const groundTex = new BABYLON.Texture('https://assets.babylonjs.com/environments/rockyGround.jpg', scene);
     // Tile approximately proportional to size so texel density stays pleasant
@@ -105,18 +107,50 @@
     overlay.position = board.position.clone(); overlay.position.y += 0.002;
 
     // --- Player ship (root-local), facing +Z ---
-    const fuselage = BABYLON.MeshBuilder.CreateCapsule('fuse', { height: 0.36, radius: 0.055, tessellation: 8 }, scene);
-    fuselage.rotation.x = Math.PI/2;
-    const nose = BABYLON.MeshBuilder.CreateCylinder('nose', { diameterTop: 0, diameterBottom: 0.11, height: 0.16, tessellation: 8 }, scene);
-    nose.rotation.x = Math.PI/2; nose.position.z = 0.22;
-    const wingL = BABYLON.MeshBuilder.CreateBox('wingL', { width: 0.24, height: 0.01, depth: 0.10 }, scene); wingL.position.x = -0.15;
-    const wingR = wingL.clone('wingR'); wingR.position.x = 0.15;
-    const tail = BABYLON.MeshBuilder.CreateBox('tail', { width: 0.04, height: 0.10, depth: 0.10 }, scene); tail.position.set(0,0.09,-0.08);
-    const shipMat = new BABYLON.StandardMaterial('shipMat', scene);
-    shipMat.emissiveColor = new BABYLON.Color3(0.75, 0.9, 1);
-    shipMat.diffuseColor  = new BABYLON.Color3(0.05, 0.10, 0.15);
-    ;[fuselage, nose, wingL, wingR, tail].forEach(m=>m.material = shipMat);
-    const ship = BABYLON.Mesh.MergeMeshes([fuselage, nose, wingL, wingR, tail], true, true, undefined, false, true);
+    function buildShip(scene){
+      const shipRoot = new BABYLON.TransformNode('ship', scene);
+
+      // Metallic silver PBR
+      const shipPBR = new BABYLON.PBRMetallicRoughnessMaterial('shipPBR', scene);
+      shipPBR.baseColor = new BABYLON.Color3(0.88, 0.90, 0.95);
+      shipPBR.metallic = 1.0; shipPBR.roughness = 0.25;
+
+      // Core fuselage with a sleeker profile
+      const fuse = BABYLON.MeshBuilder.CreateCapsule('fuse', { height: 0.42, radius: 0.06, tessellation: 12 }, scene);
+      fuse.rotation.x = Math.PI/2;
+      const spine = BABYLON.MeshBuilder.CreateCylinder('spine', { height: 0.36, diameterTop: 0.09, diameterBottom: 0.12, tessellation: 16 }, scene);
+      spine.rotation.x = Math.PI/2;
+      const nose = BABYLON.MeshBuilder.CreateCylinder('nose', { diameterTop: 0, diameterBottom: 0.12, height: 0.18, tessellation: 16 }, scene);
+      nose.rotation.x = Math.PI/2; nose.position.z = 0.24;
+
+      // Swept wings + canards
+      const wingL = BABYLON.MeshBuilder.CreateBox('wingL', { width: 0.32, height: 0.01, depth: 0.12 }, scene);
+      wingL.position.x = -0.18; wingL.rotation.y = BABYLON.Tools.ToRadians(12);
+      const wingR = wingL.clone('wingR'); wingR.position.x = 0.18; wingR.rotation.y = -BABYLON.Tools.ToRadians(12);
+      const canardL = BABYLON.MeshBuilder.CreateBox('canardL', { width: 0.16, height: 0.008, depth: 0.05 }, scene);
+      canardL.position.set(-0.09, 0.02, 0.12); canardL.rotation.y = BABYLON.Tools.ToRadians(18);
+      const canardR = canardL.clone('canardR'); canardR.position.x *= -1; canardR.rotation.y *= -1;
+
+      // Tail and twin nacelles
+      const tailV = BABYLON.MeshBuilder.CreateBox('tailV', { width: 0.05, height: 0.12, depth: 0.10 }, scene); tailV.position.set(0,0.10,-0.08);
+      const nacL = BABYLON.MeshBuilder.CreateCylinder('nacL', { height: 0.24, diameter: 0.08, tessellation: 16 }, scene);
+      nacL.rotation.x = Math.PI/2; nacL.position.set(-0.14, -0.03, -0.02);
+      const nacR = nacL.clone('nacR'); nacR.position.x *= -1;
+
+      ;[fuse, spine, nose, wingL, wingR, canardL, canardR, tailV, nacL, nacR].forEach(m=>m.material = shipPBR);
+      const core = BABYLON.Mesh.MergeMeshes([fuse, spine, nose, wingL, wingR, canardL, canardR, tailV, nacL, nacR], true, true, undefined, false, true);
+      core.parent = shipRoot;
+
+      // Glass canopy
+      const canopy = BABYLON.MeshBuilder.CreateSphere('canopy', { diameter: 0.16, segments: 16 }, scene);
+      canopy.scaling.y = 0.7; canopy.position.set(0, 0.07, 0.10);
+      const canopyMat = new BABYLON.StandardMaterial('canopyMat', scene);
+      canopyMat.diffuseColor = new BABYLON.Color3(0.6,0.8,1.0); canopyMat.emissiveColor = new BABYLON.Color3(0.15,0.25,0.35); canopyMat.alpha = 0.55;
+      canopy.material = canopyMat; canopy.parent = shipRoot;
+
+      return shipRoot;
+    }
+    const ship = buildShip(scene);
     ship.parent = root;
 
     const nearLocalZ = -TABLE_L/2 + MARGIN; // near edge (toward you) in ROOT space
@@ -183,7 +217,10 @@
     const BULLET_SPEED = 6.5;
     const BULLET_LIFE  = 1.25; // seconds
     const BULLET_RATE  = 0.12; // seconds between shots
-    let lastShotTime = -999;
+    // Tiny homing parameters
+    const TRACK_GAIN = 2.5;                 // how strongly bullets drift toward target
+    const MAX_LATERAL_SPEED_BULLET = 1.2;   // clamp for side drift (m/s)
+    let lastShotTime = -999; = -999;
 
     function makeBullet() {
       const mesh = BABYLON.MeshBuilder.CreateCylinder('bullet', { diameter: 0.03, height: 0.20 }, scene);
@@ -221,9 +258,25 @@
     droneMat.diffuseColor = new BABYLON.Color3(0.85, 0.40, 0.12);
     droneMat.emissiveColor = new BABYLON.Color3(0.60, 0.28, 0.06);
 
+    // Build a template drone with more geometry, then clone
+    const droneTemplate = (function(){
+      const parts = [];
+      const body = BABYLON.MeshBuilder.CreateIcoSphere('dBody', { radius: 0.16, subdivisions: 2 }, scene); parts.push(body);
+      const ring = BABYLON.MeshBuilder.CreateTorus('dRing', { thickness: 0.02, diameter: 0.34, tessellation: 24 }, scene);
+      ring.rotation.x = Math.PI/2; ring.position.y = 0.01; parts.push(ring);
+      for (let i = 0; i < 3; i++) {
+        const arm = BABYLON.MeshBuilder.CreateBox('dArm'+i, { width: 0.04, height: 0.01, depth: 0.18 }, scene);
+        const ang = i * Math.PI * 2 / 3; arm.position.y = -0.02; arm.position.x = Math.sin(ang) * 0.16; arm.position.z = Math.cos(ang) * 0.16; arm.rotation.y = ang; parts.push(arm);
+      }
+      const merged = BABYLON.Mesh.MergeMeshes(parts, true, true, undefined, false, true);
+      merged.material = droneMat; merged.setEnabled(false);
+      return merged;
+    })();
+
     function makeDrone(){
-      const mesh = BABYLON.MeshBuilder.CreateSphere('drone', { diameter:0.24, segments:10 }, scene);
-      mesh.parent = root; mesh.material = droneMat; mesh.position.y = TABLE_Y + 0.05;
+      const mesh = droneTemplate.clone('drone');
+      mesh.setEnabled(true); mesh.parent = root; mesh.material = droneMat; mesh.position.y = TABLE_Y + 0.05;
+      mesh.rotation.y = Math.random() * Math.PI * 2;
       const d = { mesh, speed: 0.9 + Math.random()*0.7 };
       respawnDrone(d); return d;
     }
@@ -423,7 +476,27 @@ Quest: point steer, Trigger shoot, A/X Start/Pause, B/Y Recenter.`;
 
       // Bullets (root-local motion)
       for (const b of bulletPool){
-        if (!b.active) continue; b.t += dt; b.mesh.position.addInPlace(b.vel.scale(dt));
+        if (!b.active) continue;
+        b.t += dt;
+        // Find nearest oncoming drone (ahead in +Z) and nudge laterally toward it
+        let targetD = null; let best = 1e9;
+        for (const d of drones){
+          const dz = d.mesh.position.z - b.mesh.position.z;
+          if (dz >= -0.1){
+            const dx = Math.abs(d.mesh.position.x - b.mesh.position.x);
+            const score = dx + dz * 0.15; // prefer close in X, modest weight for Z proximity
+            if (score < best){ best = score; targetD = d; }
+          }
+        }
+        if (targetD){
+          const dx = targetD.mesh.position.x - b.mesh.position.x;
+          b.vel.x += dx * TRACK_GAIN * dt;
+          if (b.vel.x >  MAX_LATERAL_SPEED_BULLET) b.vel.x =  MAX_LATERAL_SPEED_BULLET;
+          if (b.vel.x < -MAX_LATERAL_SPEED_BULLET) b.vel.x = -MAX_LATERAL_SPEED_BULLET;
+        }
+        // Keep forward speed constant
+        b.vel.z = BULLET_SPEED;
+        b.mesh.position.addInPlace(b.vel.scale(dt));
         if (b.t > BULLET_LIFE || b.mesh.position.z > (TABLE_L/2 + 0.3)){ b.active=false; b.mesh.setEnabled(false); }
       }
 
@@ -439,7 +512,7 @@ Quest: point steer, Trigger shoot, A/X Start/Pause, B/Y Recenter.`;
           if (!b.active) continue;
           const dx = b.mesh.position.x - d.mesh.position.x;
           const dz = b.mesh.position.z - d.mesh.position.z;
-          if (dx*dx + dz*dz < 0.11*0.11){
+          if (dx*dx + dz*dz < 0.14*0.14){
             explodeAtMesh(d.mesh);
             score += 100; respawnDrone(d); b.active=false; b.mesh.setEnabled(false);
             continue outer;
