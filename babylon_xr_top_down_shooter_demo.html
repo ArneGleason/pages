@@ -34,7 +34,7 @@
     const TABLE_Y    = 0.90;      // desk height
     const NEAR_FROM_CAMERA = 0.18; // near edge ~18cm from you
     const MARGIN     = 0.08;      // clamp margin from edges
-    const RECENTER_WORLD_Y = 0.9144; // 3 ft above floor (world Y) for tabletop placement
+    const RECENTER_WORLD_Z = 0.9144; // 3 ft farther along world +Z when recentering
 
     // Root that holds the entire game so we can rotate/position as one
     const root = new BABYLON.TransformNode('root', scene);
@@ -297,12 +297,12 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
       }
       root.rotation.set(0, yaw, 0);
 
-      // Place the NEAR edge center a short distance in front of the camera,
-      // but clamp the TABLE HEIGHT to a fixed world Y = 3 ft (0.9144 m).
+      // Place the NEAR edge center a short distance in front of the camera.
+      // Instead of forcing height, push it a fixed distance along WORLD +Z (3 ft).
       const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
       const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
       const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
-      desiredNearWorld.y = RECENTER_WORLD_Y; // <-- fixed height above floor
+      desiredNearWorld.z += RECENTER_WORLD_Z; // <-- shift along world Z
       root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
 
       // For desktop, also point the orbit target roughly into the table
