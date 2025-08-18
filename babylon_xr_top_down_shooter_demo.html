@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WebXR Top‑Down Shooter • Babylon.js (Refactor 2)</title>
+  <title>WebXR Top‑Down Shooter • Babylon.js (Wide Field + Y/Z Offsets)</title>
   <!-- Babylon.js CDN -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
@@ -16,10 +16,10 @@
   <canvas id="renderCanvas"></canvas>
   <script>
   // =============================================================
-  //  Babylon.js WebXR Top‑Down Shooter (clean refactor 2)
-  //  • Square tabletop (20 ft ≈ 6.10 m) at desk height in front of you
-  //  • You're standing at the NEAR edge; +Z goes AWAY from you across the table
-  //  • We parent everything under a ROOT node so we can recenter/orient to HMD
+  //  Babylon.js WebXR Top‑Down Shooter (refactor: wide board + live Y/Z recenter)
+  //  • Board: 40 ft long (Z) x 20 ft wide (X)
+  //  • Live controls to tweak recenter offsets (world Y height, forward Z distance)
+  //  • Your gaze aligns with the ship's nose (+Z away from you)
   // =============================================================
 
   const canvas = document.getElementById('renderCanvas');
@@ -30,11 +30,15 @@
     scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.06, 1);
 
     // --- Constants (meters) ---
-    const TABLE_SIZE = 6.10;      // 20 ft square
-    const TABLE_Y    = 0.90;      // desk height
-    const NEAR_FROM_CAMERA = 0.18; // near edge ~18cm from you
-    const MARGIN     = 0.08;      // clamp margin from edges
-    const RECENTER_WORLD_Y = 0.76; // ~30 in (0.76 m) fixed world height for tabletop
+    const FT = 0.3048;
+    const TABLE_W = 20 * FT;      // 6.096 m (width, X)
+    const TABLE_L = 40 * FT;      // 12.192 m (length, Z)
+    const TABLE_Y = 0.90;         // local table height within the root
+    const MARGIN  = 0.08;         // clamp margin from edges
+
+    // Recenter offsets (editable via UI)
+    let offsetY = 0.76;   // world Y height for the near edge center (default ~30")
+    let offsetZ = 0.18;   // world forward distance from camera to near edge center
 
     // Root that holds the entire game so we can rotate/position as one
     const root = new BABYLON.TransformNode('root', scene);
@@ -44,7 +48,7 @@
       'cam',
       Math.PI/2,
       BABYLON.Tools.ToRadians(45), // ~45° downward
-      6.0,
+      8.0,
       new BABYLON.Vector3(0, TABLE_Y, 0),
       scene
     );
@@ -55,9 +59,9 @@
 
     new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
 
-    // --- Square tabletop board (root-local) ---
+    // --- Rectangular tabletop board (root-local) ---
     const board = BABYLON.MeshBuilder.CreateGround('board', {
-      width: TABLE_SIZE, height: TABLE_SIZE, subdivisions: 1
+      width: TABLE_W, height: TABLE_L, subdivisions: 1
     }, scene);
     board.parent = root;
     board.position.set(0, TABLE_Y, 0);
@@ -68,31 +72,32 @@
     groundMat.diffuseColor = new BABYLON.Color3(0.10, 0.18, 0.26); // slate/teal tone
     groundMat.specularColor = BABYLON.Color3.Black();
     const groundTex = new BABYLON.Texture('https://assets.babylonjs.com/environments/rockyGround.jpg', scene);
-    groundTex.uScale = 16; groundTex.vScale = 16; // subtle detail across big table
+    // Tile approximately proportional to size so texel density stays pleasant
+    groundTex.uScale = Math.max(16, Math.round(TABLE_W * 3));
+    groundTex.vScale = Math.max(24, Math.round(TABLE_L * 3));
     groundMat.diffuseTexture = groundTex;
     board.material = groundMat;
 
-    const overlay = BABYLON.MeshBuilder.CreateGround('overlay', { width: TABLE_SIZE, height: TABLE_SIZE }, scene);
+    const overlay = BABYLON.MeshBuilder.CreateGround('overlay', { width: TABLE_W, height: TABLE_L }, scene);
     overlay.parent = root;
     overlay.position = board.position.clone(); overlay.position.y += 0.002;
     const gridMat = new BABYLON.StandardMaterial('gridMat', scene);
     gridMat.disableLighting = true; gridMat.backFaceCulling = false;
-    const gridTex = new BABYLON.DynamicTexture('gridTex', { width: 512, height: 512 }, scene, true);
+    const gridTex = new BABYLON.DynamicTexture('gridTex', { width: 1024, height: 1024 }, scene, true);
     gridTex.hasAlpha = true;
     const ctx = gridTex.getContext();
     (function drawGrid(){
-      ctx.clearRect(0,0,512,512);
-      ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,512,512);
+      const N = 1024; ctx.clearRect(0,0,N,N); ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,N,N);
       ctx.strokeStyle = 'rgba(205,235,255,0.25)'; ctx.lineWidth = 2;
-      for (let i=0;i<=512;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke();
-                                  ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke(); }
+      for (let i=0;i<=N;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,N); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(N,i); ctx.stroke(); }
       ctx.strokeStyle = 'rgba(130,210,255,0.42)'; ctx.lineWidth = 2.4;
-      for (let i=0;i<=512;i+=128){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke();
-                                   ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke(); }
+      for (let i=0;i<=N;i+=128){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,N); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(N,i); ctx.stroke(); }
       gridTex.update();
     })();
     gridMat.emissiveTexture = gridTex; gridMat.emissiveColor = new BABYLON.Color3(0.7,0.9,1);
-    gridTex.uScale = 16; gridTex.vScale = 16; overlay.material = gridMat;
+    gridTex.uScale = Math.max(24, Math.round(TABLE_W * 4));
+    gridTex.vScale = Math.max(32, Math.round(TABLE_L * 4));
+    overlay.material = gridMat;
 
     // --- Player ship (root-local), facing +Z ---
     const fuselage = BABYLON.MeshBuilder.CreateCapsule('fuse', { height: 0.36, radius: 0.055, tessellation: 8 }, scene);
@@ -109,7 +114,7 @@
     const ship = BABYLON.Mesh.MergeMeshes([fuselage, nose, wingL, wingR, tail], true, true, undefined, false, true);
     ship.parent = root;
 
-    const nearLocalZ = -TABLE_SIZE/2 + MARGIN; // near edge (toward you) in ROOT space
+    const nearLocalZ = -TABLE_L/2 + MARGIN; // near edge (toward you) in ROOT space
     ship.position = new BABYLON.Vector3(0, TABLE_Y + 0.05, nearLocalZ + 0.30);
 
     // Engine glow
@@ -136,10 +141,10 @@
     const ARRIVE_EPS  = 0.02;
 
     function clampLocalToBoard(vec) {
-      const minX = -TABLE_SIZE/2 + MARGIN;
-      const maxX =  TABLE_SIZE/2 - MARGIN;
-      const minZ = -TABLE_SIZE/2 + MARGIN;
-      const maxZ =  TABLE_SIZE/2 - MARGIN;
+      const minX = -TABLE_W/2 + MARGIN;
+      const maxX =  TABLE_W/2 - MARGIN;
+      const minZ = -TABLE_L/2 + MARGIN;
+      const maxZ =  TABLE_L/2 - MARGIN;
       vec.x = Math.min(maxX, Math.max(minX, vec.x));
       vec.z = Math.min(maxZ, Math.max(minZ, vec.z));
       vec.y = TABLE_Y + 0.05;
@@ -179,7 +184,7 @@
       mesh.material = mat; mesh.setEnabled(false);
       return { mesh, active:false, vel:new BABYLON.Vector3(0,0,BULLET_SPEED), t:0 };
     }
-    for (let i=0;i<80;i++) bulletPool.push(makeBullet());
+    for (let i=0;i<100;i++) bulletPool.push(makeBullet());
 
     function shoot() {
       const now = performance.now()/1000;
@@ -211,23 +216,20 @@
       respawnDrone(d); return d;
     }
     function respawnDrone(d){
-      d.mesh.position.x = -TABLE_SIZE/2 + MARGIN + Math.random()*(TABLE_SIZE-2*MARGIN);
-      d.mesh.position.z =  TABLE_SIZE/2 - 0.20; // far edge (root-local)
+      d.mesh.position.x = -TABLE_W/2 + MARGIN + Math.random()*(TABLE_W-2*MARGIN);
+      d.mesh.position.z =  TABLE_L/2 - 0.20; // far edge (root-local)
       d.speed = 0.9 + Math.random()*0.7;
     }
-    for (let i=0;i<14;i++) drones.push(makeDrone());
+    for (let i=0;i<18;i++) drones.push(makeDrone());
 
-    // --- Explosions (use absolute position so orientation is always correct) ---
+    // --- Explosions (world-space anchor at exact drone position) ---
     function explodeAtMesh(m){
-      // Create an anchor at the drone's absolute world position so the explosion
-      // is decoupled from any immediate respawn or root transforms.
       const worldPos = m.getAbsolutePosition().clone();
       const anchor = new BABYLON.TransformNode('explAnchor', scene);
       anchor.position.copyFrom(worldPos);
-
       const ps = new BABYLON.ParticleSystem('expl', 120, scene);
       ps.particleTexture = new BABYLON.Texture('https://playground.babylonjs.com/textures/flare.png', scene);
-      ps.emitter = anchor; // bind to fixed world-space anchor
+      ps.emitter = anchor;
       ps.minEmitPower = 1; ps.maxEmitPower = 2.2;
       ps.minSize = 0.03; ps.maxSize = 0.09;
       ps.color1 = new BABYLON.Color4(1, 0.95, 0.5, 1);
@@ -240,14 +242,62 @@
       ps.onStoppedObservable.add(()=>anchor.dispose());
     }
 
-    // --- GUI (score + pause + recenter hint) ---
+    // --- GUI (score + pause + recenter controls) ---
     const gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI('ui', true, scene);
-    const scoreText = new BABYLON.GUI.TextBlock(); scoreText.color = 'white'; scoreText.fontSize = 24; scoreText.top = '-45%'; gui.addControl(scoreText);
+
+    // Score / hints
+    const scoreText = new BABYLON.GUI.TextBlock();
+    scoreText.color = 'white'; scoreText.fontSize = 24; scoreText.top = '-45%';
+    gui.addControl(scoreText);
+
     const hintText = new BABYLON.GUI.TextBlock();
-    hintText.text = `Desktop: move mouse to steer, Space to shoot, Enter to Start/Pause, R to Recenter.
-Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
-    hintText.color = '#eef'; hintText.fontSize = 18; hintText.top = '-40%'; gui.addControl(hintText);
-    const pauseText = new BABYLON.GUI.TextBlock(); pauseText.text = 'PAUSED'; pauseText.color = '#fff'; pauseText.fontSize = 42; pauseText.isVisible = true; gui.addControl(pauseText);
+    hintText.text = `Desktop: mouse steer, Space shoot, Enter Start/Pause, R Recenter.
+Quest: point steer, Trigger shoot, A/X Start/Pause, B/Y Recenter.`;
+    hintText.color = '#eef'; hintText.fontSize = 18; hintText.top = '-40%';
+    gui.addControl(hintText);
+
+    const pauseText = new BABYLON.GUI.TextBlock();
+    pauseText.text = 'PAUSED'; pauseText.color = '#fff'; pauseText.fontSize = 42; pauseText.isVisible = true;
+    gui.addControl(pauseText);
+
+    // Recenter control panel (Y/Z)
+    const ctrlBox = new BABYLON.GUI.Rectangle('ctrlBox');
+    ctrlBox.width = '360px'; ctrlBox.height = '160px';
+    ctrlBox.thickness = 1; ctrlBox.cornerRadius = 8;
+    ctrlBox.color = '#9cf'; ctrlBox.background = 'rgba(10,16,26,0.55)';
+    ctrlBox.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    ctrlBox.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+    ctrlBox.top = '12px'; ctrlBox.left = '-12px';
+    gui.addControl(ctrlBox);
+
+    const stack = new BABYLON.GUI.StackPanel();
+    stack.width = '100%'; ctrlBox.addControl(stack);
+
+    const title = new BABYLON.GUI.TextBlock();
+    title.text = 'Recenter Offsets'; title.color = '#cfefff'; title.height = '28px'; title.fontSize = 20;
+    stack.addControl(title);
+
+    function metersToFeet(m){ return m / 0.3048; }
+    function fmtFeet(m){ return (metersToFeet(m)).toFixed(2) + ' ft'; }
+
+    function makeRow(labelText, getVal, setVal, step, min, max){
+      const row = new BABYLON.GUI.StackPanel(); row.isVertical = false; row.height = '44px'; row.width = '100%'; row.paddingTop = '4px';
+      const label = new BABYLON.GUI.TextBlock(); label.text = labelText; label.width = '90px'; label.color = '#def'; label.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT; label.paddingLeft = '8px';
+      const minus = BABYLON.GUI.Button.CreateSimpleButton('minus','–'); minus.width = '44px'; minus.height = '36px'; minus.color = '#9cf'; minus.thickness = 1; minus.cornerRadius = 6; minus.background = 'rgba(20,30,45,0.6)';
+      const value = new BABYLON.GUI.TextBlock(); value.text = ''; value.width = '160px'; value.color = '#fff'; value.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+      const plus  = BABYLON.GUI.Button.CreateSimpleButton('plus','+'); plus.width = '44px'; plus.height = '36px'; plus.color = '#9cf'; plus.thickness = 1; plus.cornerRadius = 6; plus.background = 'rgba(20,30,45,0.6)';
+      function refresh(){ const v = getVal(); value.text = v.toFixed(2)+' m  ('+fmtFeet(v)+')'; }
+      minus.onPointerUpObservable.add(()=>{ const v = Math.max(min, getVal()-step); setVal(v); refresh(); recenterTable(); });
+      plus.onPointerUpObservable.add(()=>{ const v = Math.min(max, getVal()+step); setVal(v); refresh(); recenterTable(); });
+      refresh();
+      row.addControl(label); row.addControl(minus); row.addControl(value); row.addControl(plus);
+      return row;
+    }
+
+    // Y height row (0.3m .. 1.4m)
+    stack.addControl(makeRow('Height Y', ()=>offsetY, v=>offsetY=v, 0.02, 0.30, 1.40));
+    // Z forward row (0.05m .. 0.80m)
+    stack.addControl(makeRow('Forward Z', ()=>offsetZ, v=>offsetZ=v, 0.02, 0.05, 0.80));
 
     let running = false, score = 0; function setRunning(v){ running = v; pauseText.isVisible = !v; }
 
@@ -286,42 +336,23 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
       if (fwdWorld.lengthSquared() < 1e-6) fwdWorld.set(0,0,1);
       fwdWorld.normalize();
 
-      // Yaw that aligns ROOT +Z with camera forward
+      // Yaw that aligns ROOT +Z with camera forward (flip if opposite)
       let yaw = Math.atan2(fwdWorld.x, fwdWorld.z);
       let rotMat = BABYLON.Matrix.RotationY(yaw);
       const rootZWorld = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0,0,1), rotMat).normalize();
-      if (BABYLON.Vector3.Dot(rootZWorld, fwdWorld) < 0) {
-        yaw += Math.PI; rotMat = BABYLON.Matrix.RotationY(yaw);
-      }
+      if (BABYLON.Vector3.Dot(rootZWorld, fwdWorld) < 0) { yaw += Math.PI; rotMat = BABYLON.Matrix.RotationY(yaw); }
       root.rotation.set(0, yaw, 0);
 
-      // Place the NEAR edge center a short distance in front of the camera at a FIXED world height.
-      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
+      // Place the NEAR edge center offsetZ in front of camera at height offsetY
+      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_L/2); // near edge in ROOT space
       const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
-      const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
-      desiredNearWorld.y = RECENTER_WORLD_Y; // <-- lock height so the board is below eye level
+      const desiredNearWorld = camPos.add(fwdWorld.scale(offsetZ));
+      desiredNearWorld.y = offsetY; // lock tabletop height
       root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
 
       // For desktop, also point the orbit target roughly into the table
       if (!xr) {
-        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_SIZE*0.25);
-        const lookWorld = BABYLON.Vector3.TransformCoordinates(lookLocal, root.getWorldMatrix());
-        cam.setTarget(lookWorld);
-      }
-    }
-      root.rotation.set(0, yaw, 0);
-
-      // Place the NEAR edge center a short distance in front of the camera.
-      // Instead of forcing height, push it a fixed distance along WORLD +Z (3 ft).
-      const localNearCenter = new BABYLON.Vector3(0, TABLE_Y, -TABLE_SIZE/2); // near edge in ROOT space
-      const worldNearOffset = BABYLON.Vector3.TransformCoordinates(localNearCenter, rotMat);
-      const desiredNearWorld = camPos.add(fwdWorld.scale(NEAR_FROM_CAMERA));
-      desiredNearWorld.z += RECENTER_WORLD_Z; // <-- shift along world Z
-      root.position.copyFrom(desiredNearWorld.subtract(worldNearOffset));
-
-      // For desktop, also point the orbit target roughly into the table
-      if (!xr) {
-        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_SIZE*0.25);
+        const lookLocal = new BABYLON.Vector3(0, TABLE_Y, TABLE_L*0.25);
         const lookWorld = BABYLON.Vector3.TransformCoordinates(lookLocal, root.getWorldMatrix());
         cam.setTarget(lookWorld);
       }
@@ -337,7 +368,7 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
         const pointer = ctrl.pointer; if (!pointer) return;
         const origin = pointer.getAbsolutePosition();
         const fwd    = pointer.getDirection(BABYLON.Axis.Z);
-        const ray = new BABYLON.Ray(origin, fwd, 20);
+        const ray = new BABYLON.Ray(origin, fwd, 25);
         const pick = scene.pickWithRay(ray, (m)=>m===board);
         if (pick && pick.hit){
           const lp = worldToRoot(pick.pickedPoint);
@@ -376,13 +407,13 @@ Quest VR: point to steer, Trigger to shoot, A/X Start/Pause, B/Y Recenter.`;
       // Bullets (root-local motion)
       for (const b of bulletPool){
         if (!b.active) continue; b.t += dt; b.mesh.position.addInPlace(b.vel.scale(dt));
-        if (b.t > BULLET_LIFE || b.mesh.position.z > (TABLE_SIZE/2 + 0.3)){ b.active=false; b.mesh.setEnabled(false); }
+        if (b.t > BULLET_LIFE || b.mesh.position.z > (TABLE_L/2 + 0.3)){ b.active=false; b.mesh.setEnabled(false); }
       }
 
       // Drones move toward near edge (decreasing z in ROOT space)
       for (const d of drones){
         d.mesh.position.z -= d.speed * dt;
-        if (d.mesh.position.z < (-TABLE_SIZE/2 + 0.20)) respawnDrone(d);
+        if (d.mesh.position.z < (-TABLE_L/2 + 0.20)) respawnDrone(d);
       }
 
       // Collisions (2D XZ in ROOT space)
