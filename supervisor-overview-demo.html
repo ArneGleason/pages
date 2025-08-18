@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PhoneX • Supervisor Overview (Interactive Mockup)</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <style>
+    :root{
+      --bg:#0f1220;
+      --panel:#151a2e;
+      --panel-2:#101425;
+      --muted:#8b93a7;
+      --text:#e7ebf6;
+      --accent:#5dd0ff;
+      --accent-2:#8cff9e;
+      --danger:#ff6b6b;
+      --good:#33d17a;
+      --warn:#ffd166;
+      --chip:#222842;
+      --row-hover:#1b2140;
+      --badge:#30395f;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --border:1px solid rgba(255,255,255,.06);
+      --path-dim: .35;
+      --streamA:#79c0ff;
+      --streamB:#ff9b8a;
+      --streamC:#b287ff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:linear-gradient(180deg,#0b0e1a,#0e1323 20%, #0a0d1a);
+      color:var(--text);
+    }
+    .app{
+      display:flex; flex-direction:column; min-height:100%;
+    }
+    header{
+      position:sticky; top:0; z-index:30;
+      background:linear-gradient(180deg, rgba(16,22,40,.95), rgba(16,22,40,.86));
+      backdrop-filter:blur(6px);
+      border-bottom:var(--border);
+    }
+    .header-inner{
+      display:grid; grid-template-columns: 1fr auto; gap:16px; padding:16px;
+      max-width:1300px; margin:0 auto;
+    }
+    .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+    .title{font-weight:700; letter-spacing:.2px;}
+    .badge{
+      background:var(--badge); color:#c7d1ff; border-radius:999px; padding:.15rem .5rem; font-size:.78rem;
+    }
+    .select, .input, .btn{
+      background:var(--panel); border:var(--border); border-radius:8px; padding:.5rem .6rem; color:var(--text);
+      outline:none; font:inherit;
+    }
+    .btn{ cursor:pointer; }
+    .btn.ghost{ background:transparent; border:var(--border); }
+    .btn.primary{ background:linear-gradient(180deg,#2a3c8d,#3145a5); border:0; box-shadow:var(--shadow); }
+    .btn.small{ padding:.35rem .5rem; font-size:.85rem; }
+    .btn.icon{ padding:.35rem; width:34px; display:flex; align-items:center; justify-content:center; }
+    .chips{display:flex; flex-wrap:wrap; gap:8px;}
+    .chip{
+      display:inline-flex; align-items:center; gap:6px; padding:.3rem .6rem; border-radius:999px;
+      background:var(--chip); border:var(--border); color:#dbe3ff; cursor:pointer; user-select:none;
+    }
+    .chip.selected{ outline:2px solid var(--accent); background:#1a2244;}
+    .chip .dot{ width:8px; height:8px; border-radius:50%; background:#9db3ff;}
+    .chip .close{ font-weight:700; color:#9fb1ff; opacity:.8;}
+    .subheader{
+      padding:10px 16px; max-width:1300px; margin:0 auto; display:flex; align-items:center; justify-content:space-between;
+      gap:12px; flex-wrap:wrap;
+    }
+    .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    main{ max-width:1300px; margin:16px auto; padding:0 16px 32px;}
+    .panel{ background:var(--panel-2); border:var(--border); border-radius:14px; box-shadow:var(--shadow); }
+    .table{ width:100%; border-collapse:separate; border-spacing:0; }
+    .table th, .table td{ padding:10px 8px; border-bottom:1px dashed rgba(255,255,255,.06); vertical-align:middle; }
+    .table th{ position:sticky; top:102px; background:linear-gradient(180deg, rgba(16,22,40,.98), rgba(16,22,40,.95)); backdrop-filter:blur(6px); z-index:5; }
+    .table .name-cell{ display:flex; align-items:center; gap:6px; }
+    .chev{ width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; opacity:.9; cursor:pointer;}
+    .rowItem{ transition:background .15s ease; }
+    .rowItem:hover{ background:var(--row-hover); }
+    .level-1 .name{ padding-left: 24px;}
+    .level-2 .name{ padding-left: 48px;}
+    .level-3 .name{ padding-left: 72px;}
+    .level-4 .name{ padding-left: 96px;}
+    .row-tag{ font-size:.75rem; padding:.05rem .35rem; border-radius:6px; background:#203054; color:#bed0ff; }
+    .menu-btn{ background:transparent; border:0; color:#a9b4d9; cursor:pointer; }
+    .metrics{ text-align:right; font-variant-numeric: tabular-nums; }
+    .delta{ font-size:.78rem; opacity:.85; display:block; }
+    .delta.good{ color:var(--good);}
+    .delta.bad{ color:var(--danger);}
+    .cov-bar{ height:8px; border-radius:6px; background:#233055; position:relative; overflow:hidden; }
+    .cov-fill{ position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,var(--accent),#9df3ff); }
+    .cov-stack{ display:flex; overflow:hidden; height:8px; border-radius:6px; background:#233055;}
+    .cov-a{ background:var(--streamA);}
+    .cov-b{ background:var(--streamB);}
+    .cov-c{ background:var(--streamC);}
+    .pinned{ position:sticky; top:142px; z-index:4; background:rgba(18,24,44,.9); backdrop-filter: blur(6px); }
+    .pinned .rowItem{ background:rgba(20,26,48,.8); }
+    .left-menu{ display:flex; align-items:center; gap:6px; }
+    .left-menu .menu{ position:relative; }
+    .dropdown{ position:absolute; right:0; top:32px; min-width:220px; background:#151b2f; border:var(--border); border-radius:10px; padding:6px; box-shadow:var(--shadow); z-index:20; }
+    .dropdown .item{ padding:8px 10px; border-radius:8px; cursor:pointer; }
+    .dropdown .item:hover{ background:#1c2342; }
+    .right-drawer{
+      position:fixed; top:0; right:0; bottom:0; width:560px; max-width:100vw; background:#0f1426; border-left:var(--border);
+      transform:translateX(100%); transition:transform .22s ease; z-index:60; box-shadow: -20px 0 40px rgba(0,0,0,.45);
+      display:flex; flex-direction:column;
+    }
+    .right-drawer.open{ transform:translateX(0); }
+    .drawer-header{ padding:14px 16px; display:flex; flex-direction:column; gap:6px; border-bottom:var(--border); background:#121a33;}
+    .tabs{ display:flex; gap:8px; padding:10px 12px; border-bottom:var(--border); }
+    .tab{ padding:.35rem .6rem; border-radius:8px; cursor:pointer; background:#151c36; color:#d0dbff; }
+    .tab.active{ background:#24305a; outline:1px solid rgba(255,255,255,.07); }
+    .drawer-body{ padding:14px; overflow:auto; }
+    .kpis{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+    .kpi{ background:#141a31; border:var(--border); border-radius:12px; padding:10px; }
+    .kpi .label{ color:#a9b4d9; font-size:.8rem;}
+    .kpi .value{ font-variant-numeric: tabular-nums; font-weight:700; letter-spacing:.3px; }
+    .leader{ width:100%; border-collapse:collapse; }
+    .leader th,.leader td{ padding:8px; border-bottom:1px dashed rgba(255,255,255,.08); }
+    .leader th{ color:#9fb1ff; font-weight:600; text-align:left;}
+    .sparks{ height:32px; display:flex; align-items:flex-end; gap:2px; }
+    .spark{ width:6px; background:#5ea2ff; border-radius:2px 2px 0 0; }
+    .floating-bar{
+      position:sticky; top:102px; z-index:10; display:flex; gap:8px; align-items:center;
+      background:rgba(17,23,42,.92); padding:8px; border-radius:10px; border:var(--border); width:max-content;
+      box-shadow:var(--shadow);
+    }
+    .annotation-panel{
+      position:fixed; left:16px; bottom:16px; width:360px; max-width:92vw; z-index:50;
+      background:rgba(20,26,48,.96); border:var(--border); border-radius:12px; padding:10px; box-shadow:var(--shadow);
+    }
+    .annot-row{ display:flex; gap:8px; align-items:flex-start; padding:6px; border-radius:8px; }
+    .annot-row:hover{ background:#1b2349; }
+    .annot-badge{ min-width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; background:#283563; color:#d6e0ff; }
+    .anno-dot{
+      position:absolute; width:22px; height:22px; border-radius:50%; background:radial-gradient(circle at 30% 30%, #fff, #9df3ff 40%, transparent 70%);
+      box-shadow:0 0 0 3px rgba(157,243,255,.35), 0 0 30px rgba(157,243,255,.3);
+      pointer-events:none; opacity:.85;
+    }
+    .error-banner{ background:#30191f; color:#ffb7c1; border:1px solid rgba(255,107,107,.45); padding:8px 12px; border-radius:10px; }
+    .toast{ position:fixed; right:16px; bottom:16px; background:#162038; border:var(--border); border-radius:10px; padding:10px 12px; box-shadow:var(--shadow); z-index:80; }
+    .muted{ color:var(--muted); }
+    .dimmed{ opacity:var(--path-dim); }
+    .row-hidden{ display:none; }
+    .col-chooser{ position:absolute; right:0; top:32px; background:#121833; border:var(--border); border-radius:10px; padding:8px; z-index:25; width:280px; }
+    .col-chooser h4{ margin:6px 0 6px; font-size:.9rem; color:#b7c3f5; }
+    .toggle{ display:flex; align-items:center; gap:8px; padding:6px; border-radius:8px; }
+    .toggle:hover{ background:#182149; }
+    .info{ font-size:.9rem; color:#b4c1ee;}
+    .divider{ height:1px; background:rgba(255,255,255,.08); margin:8px 0; }
+    .footnote{ font-size:.8rem; color:#95a2d6;}
+    .sticky-top{ position:sticky; top:102px; z-index:6; }
+    .link{ color:#9bd2ff; text-decoration:underline; cursor:pointer; }
+    .small{ font-size:.85rem; }
+    .center{ text-align:center; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React / Babel -->
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+<script type="text/babel">
+const {useState, useEffect, useMemo, useRef} = React;
+
+// ---------- Utilities ----------
+const fmtInt = (n)=> n==null || isNaN(n) ? "—" : Math.round(n).toLocaleString();
+const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
+const fmtDur = (mins)=>{
+  if(mins==null || isNaN(mins)) return "—";
+  const m = Math.round(mins);
+  const h = Math.floor(m/60);
+  const mm = Math.abs(m - h*60);
+  return (h.toString().padStart(2,'0'))+"h "+(mm.toString().padStart(2,'0'))+"m";
+};
+const rand = (a,b)=> a + Math.random()*(b-a);
+const pick = (arr)=> arr[Math.floor(Math.random()*arr.length)];
+
+// ---------- Demo Data Model ----------
+/** We create a small hierarchy and synthesize KPIs for "today" and "last week".
+ * We also create mock Devices, Associates, and three Streams with simple rules.
+ */
+function buildHierarchy(){
+  // shallow demo tree
+  const id = (p)=> p.toLowerCase().replace(/\s+/g,'_');
+  const nodes = [
+    {id:id("Receiving"), name:"Receiving", type:"Department", children:[
+      {id:id("Dock Storage"), name:"Dock Storage", type:"Storage", children:[]},
+      {id:id("Check-in"), name:"Check-in", type:"Workstation", children:[]},
+    ]},
+    {id:id("Testing"), name:"Testing", type:"Department", children:[
+      {id:id("Functional Test A"), name:"Functional Test A", type:"Workstation", children:[]},
+      {id:id("Functional Test B"), name:"Functional Test B", type:"Workstation", children:[]},
+      {id:id("Exceptions Store"), name:"Exceptions Store", type:"Storage", children:[]},
+    ]},
+    {id:id("Unlock"), name:"Unlock", type:"Department", children:[
+      {id:id("Unlock Bench 1"), name:"Unlock Bench 1", type:"Workstation", children:[]},
+      {id:id("Unlock Bench 2"), name:"Unlock Bench 2", type:"Workstation", children:[]},
+    ]},
+    {id:id("External Polish"), name:"External Polish", type:"Department", children:[
+      {id:id("Polish Queue"), name:"Polish Queue", type:"Storage", children:[]},
+      {id:id("Polish Station 1"), name:"Polish Station 1", type:"Workstation", children:[]},
+    ]},
+    {id:id("QC"), name:"QC", type:"Department", children:[
+      {id:id("QC Bench 1"), name:"QC Bench 1", type:"Workstation", children:[]},
+    ]},
+    {id:id("Grading"), name:"Grading", type:"Department", children:[
+      {id:id("Grading Bench 1"), name:"Grading Bench 1", type:"Workstation", children:[]},
+    ]},
+    {id:id("Sort Hub"), name:"Sort Hub", type:"Department", children:[
+      {id:id("Outbound"), name:"Outbound", type:"Storage", children:[]},
+    ]},
+  ];
+  // flatten with parent
+  const flat = {};
+  function walk(node, parent=null, level=1){
+    const row = {...node, parent, level};
+    flat[node.id]=row;
+    node.children.forEach(c=> walk(c,node.id, level+1));
+  }
+  nodes.forEach(n=> walk(n,null,1));
+  return {tree:nodes, flat};
+}
+
+function seedAssociates(){
+  const arr = [
+    {id:"u_bob", name:"Bob Nguyen", role:"Tester"},
+    {id:"u_sally", name:"Sally Ortega", role:"Grader"},
+    {id:"u_asha", name:"Asha Patel", role:"Unlock"},
+    {id:"u_miguel", name:"Miguel Santos", role:"QC"},
+    {id:"u_li", name:"Li Zhang", role:"Receiving"},
+    {id:"u_ken", name:"Ken Park", role:"Polish"},
+  ];
+  return arr;
+}
+
+function seedStreams(dict){
+  return [
+    {id:"all", name:"All Devices", color:"#cbd5ff", system:true},
+    {id:"happy", name:"Happy Path", color:"var(--streamA)", rules:{ includes:["testing","qc","grading","sort_hub"], endsBy:"sort_hub" }},
+    {id:"unlock", name:"Requires Unlock", color:"var(--streamB)", rules:{ includes:["unlock"] }},
+    {id:"polish", name:"External Polish Overflow", color:"var(--streamC)", rules:{ includes:["external_polish"] }},
+  ];
+}
+
+// Device generator with common path variants
+function seedDevices(dict, N=600){
+  const variants = [
+    {id:"v_happy", name:"Receiving→Testing→QC→Grading→Sort Hub", steps:["receiving","testing","qc","grading","sort_hub"]},
+    {id:"v_unlock", name:"Receiving→Testing→Unlock→QC→Grading→Sort Hub", steps:["receiving","testing","unlock","qc","grading","sort_hub"]},
+    {id:"v_polish", name:"Receiving→Testing→External Polish→QC→Grading→Sort Hub", steps:["receiving","testing","external_polish","qc","grading","sort_hub"]},
+    {id:"v_exception", name:"Receiving→Testing→Exceptions Store→QC→Grading→Sort Hub", steps:["receiving","testing","testing/exceptions_store","qc","grading","sort_hub"]},
+  ];
+  const nodesForKey = (key)=> Object.values(dict).filter(n=> n.id.startsWith(key)).map(n=> n.id);
+  const mapKey = {
+    "receiving": ["receiving","dock_storage","check-in"],
+    "testing": ["testing","functional_test_a","functional_test_b","exceptions_store"],
+    "unlock": ["unlock","unlock_bench_1","unlock_bench_2"],
+    "external_polish": ["external_polish","polish_queue","polish_station_1"],
+    "qc": ["qc","qc_bench_1"],
+    "grading":["grading","grading_bench_1"],
+    "sort_hub":["sort_hub","outbound"],
+    "testing/exceptions_store":["testing","exceptions_store"],
+  };
+  // Expand step token to a representative node id
+  function expandStep(token){
+    const options = mapKey[token] || [token];
+    return pick(options);
+  }
+  const devices=[];
+  for(let i=0;i<N;i++){
+    const variant = pick(variants);
+    const stepsExpanded = variant.steps.map(expandStep);
+    devices.push({
+      id:"D"+(100000+i),
+      variant: variant.id,
+      path: stepsExpanded,
+      startedAt: Date.now() - rand(0, 6*60*60*1000), // within last 6 hours
+      box: "BX"+(1000+ (i%120)),
+    });
+  }
+  return devices;
+}
+
+// Compute per-node metrics in a very simplified way for demo
+function computeMetrics({flat, devices}, streams){
+  // For each device, decide if it's "today" and assign durations
+  // We'll make per-node durations for Wait and Work as random ranges.
+  const perNode = {}; // nodeId -> stats
+  const perNodeLW = {}; // last week baseline
+  const assign = (obj,id)=> (obj[id]||(obj[id]={in:0,wip:0,out:0,workTime:0,waitTime:0,avgWip:0, hours:8}));
+  const now = Date.now();
+  devices.forEach(d=>{
+    // For each step in device path, simulate Wait and Work
+    d.path.forEach((nodeId, idx)=>{
+      const s = assign(perNode,nodeId);
+      s.in += 1;
+      const work = rand(8, 30); // minutes
+      const wait = rand(5, 40);
+      s.workTime += work;
+      s.waitTime += wait;
+      s.out += (idx===d.path.length-1? 1 : 0); // last step counts as out from final node
+      // wip point-in-time: random few
+      if(Math.random()<0.05) s.wip += 1;
+      s.avgWip += Math.random()*0.3; // time-weighted avg (toy)
+    });
+  });
+  // Build LW as 0.9–1.1 noise vs today
+  Object.keys(perNode).forEach(id=>{
+    const s = perNode[id];
+    const m = assign(perNodeLW,id);
+    const factor = rand(0.85,1.12);
+    m.in = Math.round(s.in * factor);
+    m.out = Math.round(s.out * factor);
+    m.wip = Math.round(s.wip * rand(0.8,1.2)+ (Math.random()<0.2?1:0));
+    m.workTime = s.workTime * rand(0.85,1.15);
+    m.waitTime = s.waitTime * rand(0.85,1.2);
+    m.avgWip = s.avgWip * rand(0.85,1.2);
+    m.hours = s.hours;
+  });
+  // Stream coverage: naive—count devices whose path includes node
+  const coverage = {}; // streamId -> nodeId -> share
+  const streamFuncs = {
+    "all": (d)=> true,
+    "happy": (d)=> d.variant==="v_happy",
+    "unlock": (d)=> d.variant==="v_unlock",
+    "polish": (d)=> d.variant==="v_polish",
+  };
+  streams.forEach(st=>{
+    const total = devices.filter(streamFuncs[st.id] || (()=>true)).length;
+    const map = {};
+    Object.values(flat).forEach(n=> map[n.id]=0);
+    devices.filter(streamFuncs[st.id] || (()=>true)).forEach(d=>{
+      new Set(d.path).forEach(nodeId=> map[nodeId] += 1);
+    });
+    Object.keys(map).forEach(id=>{
+      map[id] = total? map[id]/total : 0;
+    });
+    coverage[st.id]=map;
+  });
+  return {perNode, perNodeLW, coverage};
+}
+
+function seedAssociateMetrics(associates, flat, devices){
+  // assign each device's workstations to random associates
+  const benches = Object.values(flat).filter(n=> n.type==="Workstation").map(n=>n.id);
+  const assocByNode = {};
+  benches.forEach(b=> assocByNode[b] = associates.map(a=> ({...a, out:0, active:0, waitStart:0, fpy:rand(0.86,0.97)})));
+  devices.forEach(d=>{
+    d.path.forEach(nodeId=>{
+      if(benches.includes(nodeId)){
+        const crew = assocByNode[nodeId];
+        const worker = crew[Math.floor(Math.random()*crew.length)];
+        worker.out += 1;
+        worker.active += rand(8,30);
+        worker.waitStart += rand(5,40);
+      }
+    });
+  });
+  // Compute simple metrics
+  Object.keys(assocByNode).forEach(nodeId=>{
+    assocByNode[nodeId] = assocByNode[nodeId].map(x=>{
+      const hours = rand(3.5,7.5);
+      const exitRate = x.out / hours;
+      return {
+        id:x.id, name:x.name, role:x.role,
+        hours: hours,
+        out: x.out,
+        exitRate,
+        avgWork: x.out? x.active/x.out : 0,
+        p90Work: x.out? x.active/x.out * 1.6 : 0,
+        waitToStart: x.out? x.waitStart/x.out : 0,
+        fpy: x.fpy,
+        reworkRate: 1-x.fpy,
+        util: clamp(rand(0.45,0.95),0,1),
+        mix: rand(0.8,1.3),
+      };
+    }).sort((a,b)=> b.exitRate - a.exitRate);
+  });
+  return assocByNode;
+}
+
+// ---------- Persistence ----------
+const Prefs = {
+  load(){
+    try{
+      const raw = localStorage.getItem("pxw.overview.v2.prefs");
+      return raw? JSON.parse(raw): {};
+    }catch(e){ return {}; }
+  },
+  save(p){
+    try{
+      localStorage.setItem("pxw.overview.v2.prefs", JSON.stringify(p));
+    }catch(e){}
+  }
+}
+
+// ---------- Components ----------
+function Toggle({label, checked, onChange, small}){
+  return <label className="toggle">
+    <input type="checkbox" checked={!!checked} onChange={e=> onChange(e.target.checked)} />
+    <span>{label}</span>
+  </label>;
+}
+
+function ColumnChooser({open, onClose, state, setState}){
+  if(!open) return null;
+  const s = state;
+  return <div className="col-chooser" role="dialog" aria-label="Column chooser">
+    <h4>Columns</h4>
+    <Toggle label="In" checked={s.cols.in} onChange={v=> setState({...s, cols:{...s.cols, in:v}})} />
+    <Toggle label="WIP" checked={s.cols.wip} onChange={v=> setState({...s, cols:{...s.cols, wip:v}})} />
+    <Toggle label="Avg WIP" checked={s.cols.avgWip} onChange={v=> setState({...s, cols:{...s.cols, avgWip:v}})} />
+    <Toggle label="Out" checked={s.cols.out} onChange={v=> setState({...s, cols:{...s.cols, out:v}})} />
+    <Toggle label="Exit Rate" checked={s.cols.exitRate} onChange={v=> setState({...s, cols:{...s.cols, exitRate:v}})} />
+    <Toggle label="Lead Time" checked={s.cols.lead} onChange={v=> setState({...s, cols:{...s.cols, lead:v}})} />
+    <Toggle label="Wait Time" checked={s.cols.wait} onChange={v=> setState({...s, cols:{...s.cols, wait:v}})} />
+    <Toggle label="Work Time" checked={s.cols.work} onChange={v=> setState({...s, cols:{...s.cols, work:v}})} />
+    <div className="divider"></div>
+    <h4>Δ vs Last Week</h4>
+    <Toggle label="Show Δ chips" checked={s.delta.enabled} onChange={v=> setState({...s, delta:{...s.delta, enabled:v}})} />
+    <div style={{paddingLeft:18}} className="small muted">Counts: green ▲ up. Time metrics: green when lower.</div>
+    <div className="divider"></div>
+    <h4>Path Coverage</h4>
+    <Toggle label="Show Path Coverage column" checked={s.coverage.enabled} onChange={v=> setState({...s, coverage:{...s.coverage, enabled:v}})} />
+    <div className="divider"></div>
+    <button className="btn small" onClick={onClose}>Close</button>
+  </div>;
+}
+
+function AssociatesDrawer({open, onClose, node, assocData, streamChips}){
+  const [tab, setTab] = useState("overview");
+  const [compare, setCompare] = useState({on:false, ids:[]});
+  if(!open || !node) return <div className="right-drawer"></div>;
+  const rows = assocData[node.id] || [];
+  const toggleCompare = (id)=>{
+    const ids = compare.ids.includes(id) ? compare.ids.filter(x=>x!==id) : [...compare.ids, id].slice(0,4);
+    setCompare({...compare, ids});
+  };
+  const selected = rows.filter(r=> compare.ids.includes(r.id));
+  return <div className={"right-drawer open"}>
+    <div className="drawer-header">
+      <div className="row" style={{justifyContent:'space-between'}}>
+        <div className="row">
+          <div className="title">{node.name}</div>
+          <span className="badge">{node.type}</span>
+        </div>
+        <button className="btn ghost small" onClick={onClose}>✕ Close</button>
+      </div>
+      <div className="row">
+        {streamChips.map(s=><span key={s.id} className="badge">{s.name}</span>)}
+      </div>
+    </div>
+    <div className="tabs">
+      <div className={"tab "+(tab==="overview"?"active":"")} onClick={()=>setTab("overview")}>Overview</div>
+      <div className={"tab "+(tab==="associates"?"active":"")} onClick={()=>setTab("associates")}>Associates</div>
+      <div className={"tab "+(tab==="paths"?"active":"")} onClick={()=>setTab("paths")}>Paths</div>
+    </div>
+    <div className="drawer-body">
+      {tab==="overview" && <div>
+        <div className="kpis">
+          <div className="kpi"><div className="label">Out</div><div className="value">{fmtInt(rows.reduce((a,b)=>a+b.out,0))}</div></div>
+          <div className="kpi"><div className="label">Exit Rate</div><div className="value">{(rows.reduce((a,b)=>a+b.exitRate,0)).toFixed(1)}/h</div></div>
+          <div className="kpi"><div className="label">Avg Work Time</div><div className="value">{fmtDur(rows.length? rows.reduce((a,b)=>a+b.avgWork,0)/rows.length : 0)}</div></div>
+        </div>
+        <div style={{marginTop:12}} className="footnote">Demo view. Metrics respect current stream selection in the parent mock model.</div>
+      </div>}
+      {tab==="associates" && <div>
+        <div className="row" style={{justifyContent:'space-between', marginBottom:8}}>
+          <div className="row">
+            <label className="toggle"><input type="checkbox" checked={compare.on} onChange={e=> setCompare({...compare, on:e.target.checked, ids:[]})}/> <span>Select to compare</span></label>
+          </div>
+          {selected.length>0 && <div className="badge">{selected.length} selected</div>}
+        </div>
+        {compare.on && selected.length>0 && <div className="panel" style={{padding:8, marginBottom:10}}>
+          <div className="row" style={{gap:10, flexWrap:'wrap'}}>
+            {selected.map(a=><div key={a.id} className="kpi" style={{minWidth:180}}>
+              <div className="label">{a.name}</div>
+              <div className="value">{fmtInt(a.out)} out · {(a.exitRate).toFixed(1)}/h</div>
+              <div className="muted small">Avg {fmtDur(a.avgWork)} · P90 {fmtDur(a.p90Work)}</div>
+            </div>)}
+          </div>
+        </div>}
+        <table className="leader">
+          <thead>
+            <tr>
+              {compare.on && <th></th>}
+              <th>Associate</th><th>Hours</th><th>Out</th><th>Exit Rate</th><th>Avg Work</th><th>P90 Work</th><th>Wait to Start</th><th>FPY</th><th>Util</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r=><tr key={r.id}>
+              {compare.on && <td><input type="checkbox" checked={compare.ids.includes(r.id)} onChange={()=> toggleCompare(r.id)} /></td>}
+              <td>{r.name}</td>
+              <td>{r.hours.toFixed(1)}</td>
+              <td>{fmtInt(r.out)}</td>
+              <td>{r.exitRate.toFixed(1)}/h</td>
+              <td>{fmtDur(r.avgWork)}</td>
+              <td>{fmtDur(r.p90Work)}</td>
+              <td>{fmtDur(r.waitToStart)}</td>
+              <td>{(r.fpy*100).toFixed(0)}%</td>
+              <td>{(r.util*100).toFixed(0)}%</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+      {tab==="paths" && <div className="info">Path variant analysis demo placeholder. Use the Path Coverage column and Highlight tools in the table to explore streams.</div>}
+    </div>
+  </div>;
+}
+
+function AnnotationPanel({on, setOn}){
+  if(!on) return null;
+  const items = [
+    {n:1, t:"Streams chips — multi-select cohorts; Compare Streams renders A/B values in cells."},
+    {n:2, t:"Column Chooser — toggle Δ vs LW and Path Coverage columns."},
+    {n:3, t:"Per-row scope — All Devices vs Worked-on only in the row menu."},
+    {n:4, t:"Associates — open drawer for leaderboard & compare."},
+    {n:5, t:"Highlight Stream Paths — dims non-path rows; filter to only path rows."},
+    {n:6, t:"Averages & Totals row — Out-weighted for time metrics."},
+    {n:7, t:"Auto-refresh every 60s (simulated)."},
+  ];
+  return <div className="annotation-panel">
+    <div className="row" style={{justifyContent:'space-between'}}>
+      <div className="title">Annotations</div>
+      <button className="btn ghost small" onClick={()=> setOn(false)}>✕</button>
+    </div>
+    {items.map(it=><div key={it.n} className="annot-row">
+      <div className="annot-badge">{it.n}</div>
+      <div className="small">{it.t}</div>
+    </div>)}
+  </div>;
+}
+
+function App(){
+  const [prefs,setPrefs] = useState(()=> Prefs.load());
+  const {tree, flat} = useMemo(()=> buildHierarchy(), []);
+  const associates = useMemo(()=> seedAssociates(), []);
+  const [streams, setStreams] = useState(()=> seedStreams(flat));
+  const [selectedStreams, setSelectedStreams] = useState(()=> prefs.streamsSelected || ["all"]);
+  const [compare, setCompare] = useState(()=> !!prefs.compareStreams);
+  const [date, setDate] = useState(()=> prefs.date || new Date().toISOString().slice(0,10));
+  const [devices] = useState(()=> seedDevices(flat, 700));
+  const [assocByNode] = useState(()=> seedAssociateMetrics(associates, flat, devices));
+  const metrics = useMemo(()=> computeMetrics({flat, devices}, streams), [flat, devices, streams]);
+  const [colState, setColState] = useState(()=> prefs.colState || {
+    cols:{in:true,wip:true,avgWip:true,out:true,exitRate:true,lead:true,wait:false,work:false},
+    delta:{enabled:true},
+    coverage:{enabled:false}
+  });
+  const [openState, setOpenState] = useState(()=> new Set(prefs.openRows || Object.values(flat).filter(n=> n.level<=1).map(n=>n.id)));
+  const [rowScope, setRowScope] = useState(()=> prefs.rowScope || {}); // id -> 'all'|'worked'
+  const [showColChooser, setShowColChooser] = useState(false);
+  const [highlight, setHighlight] = useState(()=> prefs.highlight || {on:false, anchor:null, variant:null, only:false});
+  const [drawer, setDrawer] = useState({open:false, node:null});
+  const [error, setError] = useState(null);
+  const [anno, setAnno] = useState(true);
+  const [toast, setToast] = useState("");
+  const refreshTick = useRef(0);
+
+  // Persistence
+  useEffect(()=>{
+    Prefs.save({
+      streamsSelected:selectedStreams, compareStreams:compare, date, colState,
+      openRows: Array.from(openState), rowScope, highlight
+    });
+  }, [selectedStreams, compare, date, colState, openState, rowScope, highlight]);
+
+  // Auto-refresh simulation
+  useEffect(()=>{
+    const iv = setInterval(()=>{
+      refreshTick.current++;
+      // randomly mutate metrics by tiny amount by re-seeding? We'll just set toast.
+      setToast("Auto-refreshed at "+ new Date().toLocaleTimeString());
+      setTimeout(()=> setToast(""), 2000);
+    }, 60000);
+    return ()=> clearInterval(iv);
+  },[]);
+
+  const streamsSelectedObjs = selectedStreams.map(id=> streams.find(s=> s.id===id)).filter(Boolean);
+  const primaryStream = streamsSelectedObjs[0] || streams[0];
+
+  // Build flattened rows for rendering with aggregation
+  function buildRows(){
+    const rows = [];
+    function addNode(id){
+      const n = flat[id];
+      const scope = rowScope[id] || 'all';
+      const mToday = metrics.perNode[id] || {in:0,out:0,wip:0,avgWip:0,waitTime:0,workTime:0,hours:8};
+      const mLW = metrics.perNodeLW[id] || {in:0,out:0,wip:0,avgWip:0,waitTime:0,workTime:0,hours:8};
+      function toLead(m){
+        const exitRate = m.hours? (m.out/m.hours) : 0;
+        const lead = (m.avgWip && exitRate) ? (m.avgWip/exitRate*60) : null; // minutes
+        return {exitRate, lead};
+      }
+      const tLead = toLead(mToday);
+      const lwLead = toLead(mLW);
+      const row = {
+        id, name:n.name, type:n.type, level:n.level,
+        in:mToday.in, wip:mToday.wip, avgWip:mToday.avgWip, out:mToday.out,
+        exitRate: tLead.exitRate, lead: tLead.lead, wait:mToday.waitTime, work:mToday.workTime,
+        inLW:mLW.in, wipLW:mLW.wip, avgWipLW:mLW.avgWip, outLW:mLW.out,
+        exitRateLW: lwLead.exitRate, leadLW: lwLead.lead, waitLW:mLW.waitTime, workLW:mLW.workTime,
+        coverage:{
+          a: metrics.coverage["happy"]?.[id] || 0,
+          b: metrics.coverage["unlock"]?.[id] || 0,
+          c: metrics.coverage["polish"]?.[id] || 0,
+        },
+        scope
+      };
+      rows.push(row);
+      (n.children||[]).forEach(c=> addNode(c.id));
+    }
+    // Add a pseudo "Averages & Totals" pinned row at the top
+    const agg = aggregateRows(Object.values(flat).filter(n=> n.level===1).map(n=> n.id));
+    rows.push({...agg, pinned:true});
+    // then actual rows
+    Object.values(flat).filter(n=> n.level===1).forEach(n=> addNode(n.id));
+    return rows;
+  }
+
+  function aggregateRows(ids){
+    // For demo, sum metrics of provided ids (using 'today' and 'lw')
+    let acc = {id:"agg", name:"Averages & Totals", type:"", level:0,
+      in:0,wip:0,avgWip:0,out:0, exitRate:0, lead:0, wait:0, work:0,
+      inLW:0,wipLW:0,avgWipLW:0,outLW:0, exitRateLW:0, leadLW:0, waitLW:0, workLW:0
+    };
+    let outWeight=0, outWeightLW=0;
+    ids.forEach(id=>{
+      const m = metrics.perNode[id] || {};
+      const mlw = metrics.perNodeLW[id] || {};
+      acc.in += m.in||0; acc.wip += m.wip||0; acc.avgWip += m.avgWip||0; acc.out += m.out||0;
+      acc.wait += m.waitTime||0; acc.work += m.workTime||0;
+      acc.inLW += mlw.in||0; acc.wipLW += mlw.wip||0; acc.avgWipLW += mlw.avgWip||0; acc.outLW += mlw.out||0;
+      acc.waitLW += mlw.waitTime||0; acc.workLW += mlw.workTime||0;
+    });
+    // ExitRate from totals (approx)
+    acc.exitRate = acc.out/8; acc.lead = acc.avgWip/(acc.exitRate||1)*60;
+    acc.exitRateLW = acc.outLW/8; acc.leadLW = acc.avgWipLW/(acc.exitRateLW||1)*60;
+    acc.pinned=true;
+    return acc;
+  }
+
+  const rows = useMemo(()=> buildRows(), [metrics, rowScope]);
+
+  // expand/collapse helpers
+  const isOpen = (id)=> openState.has(id);
+  const toggleOpen = (id)=> setOpenState(s=>{
+    const ns = new Set(s);
+    if(ns.has(id)) ns.delete(id); else ns.add(id);
+    return ns;
+  });
+  const expandAll = ()=> setOpenState(new Set(Object.values(flat).map(n=> n.id)));
+  const collapseAll = ()=> setOpenState(new Set(Object.values(flat).filter(n=> n.level===1).map(n=>n.id)));
+
+  // highlight path helpers (demo: uses primary selected stream coverage; row deemed on-path if coverage > 0.2)
+  const isOnPath = (row)=> !highlight.on? true : (metrics.coverage[primaryStream?.id||"all"]?.[row.id]||0) > 0.2;
+  const pathDimClass = (row)=> highlight.on && !isOnPath(row) ? "dimmed "+ (highlight.only? "row-hidden":"") : "";
+
+  // Renderers
+  function Delta({v, lw, isTime}){
+    if(!colState.delta.enabled) return null;
+    if(v==null || lw==null || lw===0) return <span className="delta muted">—</span>;
+    const diff = v - lw;
+    const pct = lw? (diff/lw*100): 0;
+    const good = isTime ? diff<0 : diff>0;
+    const cls = good? "delta good":"delta bad";
+    const sign = diff>0? "+":"";
+    const fmtMain = isTime? fmtDur(Math.abs(diff)) : (Math.abs(diff)<1? diff.toFixed(1): Math.round(Math.abs(diff))).toString();
+    const pctTxt = (pct>=10 || pct<=-10)? Math.round(pct)+"%": pct.toFixed(1)+"%";
+    return <span className={cls}>{sign}{isTime? fmtDur(diff): fmtMain} ({sign}{pctTxt})</span>;
+  }
+
+  function CovCell({row}){
+    if(!colState.coverage.enabled) return null;
+    const a = row.coverage.a, b=row.coverage.b, c=row.coverage.c;
+    if(compare && selectedStreams.length>1){
+      const total = Math.max(0.0001, a + b + c);
+      return <div className="cov-stack" title={`A ${(a*100).toFixed(0)}% · B ${(b*100).toFixed(0)}% · C ${(c*100).toFixed(0)}%`}>
+        <div className="cov-a" style={{width:(a/total*100)+"%"}}></div>
+        <div className="cov-b" style={{width:(b/total*100)+"%"}}></div>
+        <div className="cov-c" style={{width:(c/total*100)+"%"}}></div>
+      </div>;
+    }
+    const cov = row.coverage.a;
+    return <div className="cov-bar" title={`${(cov*100).toFixed(0)}% of stream touched`}><div className="cov-fill" style={{width:(cov*100)+"%"}}></div></div>;
+  }
+
+  function NameCell({row}){
+    const n = flat[row.id];
+    const chevron = (n.children||[]).length>0;
+    return <div className={"name-cell"}>
+      <div className="chev" onClick={()=> toggleOpen(row.id)}>{chevron? (isOpen(row.id)?"▾":"▸"):"·"}</div>
+      <div className="name">{row.name}</div>
+      <span className="row-tag">{row.type||""}</span>
+      <div className="menu" style={{marginLeft:"auto"}}>
+        <button className="menu-btn" onClick={(e)=>{
+          e.currentTarget.nextSibling?.classList.toggle("open");
+        }}>⋯</button>
+        <div className="dropdown" style={{display:'none'}} onMouseLeave={e=> e.currentTarget.style.display='none'}>
+          <div className="item" onClick={(e)=>{
+            setRowScope({...rowScope, [row.id]:(row.scope==='all'?'worked':'all')});
+            e.currentTarget.parentElement.style.display='none';
+          }}>Scope: <b>{row.scope==='all'?'Worked-on only':'All Devices'}</b></div>
+          <div className="item" onClick={(e)=>{
+            setDrawer({open:true, node: flat[row.id]});
+            e.currentTarget.parentElement.style.display='none';
+          }}>👤 View Associates</div>
+          <div className="item" onClick={(e)=>{
+            setHighlight({on:true, anchor:row.id, only:false});
+            e.currentTarget.parentElement.style.display='none';
+          }}>🔦 Highlight paths from here</div>
+        </div>
+      </div>
+    </div>;
+  }
+
+  function Header(){
+    return <header>
+      <div className="header-inner">
+        <div className="row">
+          <div className="title">Supervisor Overview</div>
+          <span className="badge">Demo • Mock Data</span>
+          <span className="badge">Facility TZ: Local</span>
+        </div>
+        <div className="row" style={{justifyContent:'flex-end'}}>
+          <label className="row">
+            <span className="muted small">Date</span>
+            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
+          </label>
+          <button className="btn ghost small" title="Expand All" onClick={expandAll}>Expand All</button>
+          <button className="btn ghost small" title="Collapse All" onClick={collapseAll}>Collapse All</button>
+          <button className="btn ghost small" onClick={()=> setAnno(a=>!a)}>{anno? "Hide":"Show"} Annotations</button>
+        </div>
+      </div>
+      <div className="subheader">
+        <div className="row" style={{flex:1, minWidth:300}}>
+          <span className="muted small">Streams</span>
+          <div className="chips">
+            {streams.map(s=> <div key={s.id}
+              className={"chip "+ (selectedStreams.includes(s.id)?"selected":"")}
+              onClick={()=>{
+                if(s.id==="all"){
+                  setSelectedStreams(["all"]);
+                  setCompare(false);
+                }else{
+                  let ns = selectedStreams.includes(s.id)? selectedStreams.filter(x=>x!==s.id): [...selectedStreams.filter(x=>x!=="all"), s.id];
+                  if(ns.length===0) ns=["all"];
+                  setSelectedStreams(ns);
+                }
+              }}>
+              <span className="dot" style={{background: s.color}}></span>
+              <span>{s.name}</span>
+            </div>)}
+          </div>
+          <button className="btn ghost small" disabled={selectedStreams.length<2} onClick={()=> setCompare(c=>!c)}>
+            {compare? "✓ ":""}Compare Streams
+          </button>
+          <button className="btn small" onClick={()=>{
+            const name = prompt("New Stream name (demo will create a random rule):","My Stream");
+            if(!name) return;
+            const id = "s_"+ Math.random().toString(36).slice(2,7);
+            setStreams([...streams, {id, name, color:"#"+Math.floor(Math.random()*0xffffff).toString(16), rules:{ includes:["unlock"]}}]);
+            setSelectedStreams(prev=> [...prev.filter(x=>x!=="all"), id]);
+          }}>+ New Stream</button>
+        </div>
+        <div className="toolbar">
+          <div className="left-menu">
+            <div className="menu">
+              <button className="btn ghost small" onClick={()=> setShowColChooser(v=>!v)}>Column Chooser ▾</button>
+              <ColumnChooser open={showColChooser} onClose={()=> setShowColChooser(false)} state={colState} setState={setColState} />
+            </div>
+            <button className={"btn ghost small "+(highlight.on?"primary":"")} onClick={()=> setHighlight(h=> ({...h, on:!h.on}))}>
+              {highlight.on? "✓ ":""}Highlight Stream Paths
+            </button>
+            {highlight.on && <div className="floating-bar">
+              <button className="btn ghost small" onClick={()=> setHighlight(h=> ({...h, only:!h.only}))}>
+                {highlight.only? "✓ ":""}Only show path rows
+              </button>
+              <button className="btn ghost small" onClick={()=> setHighlight({on:false, anchor:null, variant:null, only:false})}>Clear</button>
+            </div>}
+          </div>
+        </div>
+      </div>
+    </header>;
+  }
+
+  function MetricsRow({row}){
+    const t = (label, value, lw, isTime=false)=>{
+      return <td className={"metrics "+pathDimClass(row)} title={isTime? fmtDur(value): fmtInt(value)}>
+        <div>{isTime? fmtDur(value): fmtInt(value)}</div>
+        <Delta v={value} lw={lw} isTime={isTime} />
+      </td>;
+    };
+    return <tr className={"rowItem level-"+row.level+" "+ (row.pinned?"pinned":"")} key={row.id}>
+      <td className={"name-cell "+pathDimClass(row)}>
+        {row.pinned? <div className="name">{row.name}</div> : <NameCell row={row} />}
+      </td>
+      {colState.coverage.enabled && <td className={pathDimClass(row)}><CovCell row={row}/></td>}
+      {colState.cols.in && t("In", row.in, row.inLW, false)}
+      {colState.cols.wip && t("WIP", row.wip, row.wipLW, false)}
+      {colState.cols.avgWip && t("Avg WIP", row.avgWip, row.avgWipLW, false)}
+      {colState.cols.out && t("Out", row.out, row.outLW, false)}
+      {colState.cols.exitRate && <td className={"metrics "+pathDimClass(row)}>{(row.exitRate||0).toFixed(1)}/h<Delta v={row.exitRate} lw={row.exitRateLW} isTime={false}/></td>}
+      {colState.cols.lead && t("Lead", row.lead, row.leadLW, true)}
+      {colState.cols.wait && t("Wait", row.wait, row.waitLW, true)}
+      {colState.cols.work && t("Work", row.work, row.workLW, true)}
+    </tr>;
+  }
+
+  // rows to show accounting for expansion and highlight-only
+  function visibleRows(){
+    const arr = rows.filter(r=> !r.pinned);
+    const vis = [];
+    function add(id){
+      const row = rows.find(r=> r.id===id);
+      vis.push(row);
+      const n = flat[id];
+      if(isOpen(id)){
+        (n.children||[]).forEach(c=> add(c.id));
+      }
+    }
+    Object.values(flat).filter(n=> n.level===1).forEach(n=> add(n.id));
+    const final = [rows.find(r=> r.pinned), ...vis];
+    return final;
+  }
+
+  return <div className="app">
+    <Header />
+    <main>
+      {error && <div className="error-banner">Overview data is unavailable. <button className="btn small">Retry</button></div>}
+      <div className="panel">
+        <table className="table">
+          <thead>
+            <tr>
+              <th style={{textAlign:'left'}}>Name</th>
+              {colState.coverage.enabled && <th>Path Coverage</th>}
+              {colState.cols.in && <th className="metrics">In</th>}
+              {colState.cols.wip && <th className="metrics">WIP</th>}
+              {colState.cols.avgWip && <th className="metrics">Avg WIP</th>}
+              {colState.cols.out && <th className="metrics">Out</th>}
+              {colState.cols.exitRate && <th className="metrics">Exit Rate</th>}
+              {colState.cols.lead && <th className="metrics">Lead</th>}
+              {colState.cols.wait && <th className="metrics">Wait</th>}
+              {colState.cols.work && <th className="metrics">Work</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRows().map(r=> <MetricsRow key={r.id} row={r} />)}
+          </tbody>
+        </table>
+      </div>
+      <div className="muted small" style={{marginTop:8}}>Demo notes: numbers are synthesized; Δ vs LW compares to a randomized baseline. Highlight paths uses the primary selected stream.</div>
+    </main>
+    <AssociatesDrawer
+      open={drawer.open}
+      onClose={()=> setDrawer({open:false, node:null})}
+      node={drawer.node}
+      assocData={assocByNode}
+      streamChips={streamsSelectedObjs}
+    />
+    <AnnotationPanel on={anno} setOn={setAnno} />
+    {toast && <div className="toast">{toast}</div>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
